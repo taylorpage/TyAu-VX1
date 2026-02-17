@@ -103,9 +103,6 @@ public class VX1ExtensionAudioUnit: AUAudioUnit, @unchecked Sendable
             if let grMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.gainReductionMeter.rawValue) {
                 grMeter.setValue(0.0, originator: nil)
             }
-            if let vuMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.outputLevelMeter.rawValue) {
-                vuMeter.setValue(-60.0, originator: nil)
-            }
         }
 
         // Stop meter update timer
@@ -175,10 +172,5 @@ public class VX1ExtensionAudioUnit: AUAudioUnit, @unchecked Sendable
             grMeter.setValue(currentGR, originator: nil)
         }
 
-        // Update output level meter (drives the VU meter needle)
-        if let vuMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.outputLevelMeter.rawValue) {
-            let currentLevel = kernel.getParameter(VX1ExtensionParameterAddress.outputLevelMeter.rawValue)
-            vuMeter.setValue(currentLevel, originator: nil)
-        }
     }
 }

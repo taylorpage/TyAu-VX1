@@ -67,25 +67,17 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             defaultValue: 100.0
         )
         ParameterSpec(
-            address: .knee,
-            identifier: "knee",
-            name: "Knee",
-            units: .decibels,
-            valueRange: 0.0...12.0,
-            defaultValue: 3.0
-        )
-        ParameterSpec(
-            address: .detection,
-            identifier: "detection",
-            name: "Detection",
+            address: .grip,
+            identifier: "grip",
+            name: "Grip",
             units: .percent,
             valueRange: 0.0...100.0,
-            defaultValue: 100.0
+            defaultValue: 0.0
         )
         ParameterSpec(
-            address: .sheen,
-            identifier: "sheen",
-            name: "Sheen",
+            address: .bite,
+            identifier: "bite",
+            name: "Bite",
             units: .percent,
             valueRange: 0.0...100.0,
             defaultValue: 25.0
@@ -100,29 +92,12 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             flags: [.flag_IsReadable, .flag_IsWritable]  // Writable for internal updates, but controlled by DSP
         )
         ParameterSpec(
-            address: .inputGain,
-            identifier: "inputGain",
-            name: "Input",
-            units: .decibels,
-            valueRange: 0.0...24.0,
-            defaultValue: 0.0
-        )
-        ParameterSpec(
             address: .gateThreshold,
             identifier: "gateThreshold",
             name: "Gate",
             units: .decibels,
             valueRange: -80.0...(-20.0),
             defaultValue: -80.0
-        )
-        ParameterSpec(
-            address: .outputLevelMeter,
-            identifier: "outputLevelMeter",
-            name: "Output Level",
-            units: .decibels,
-            valueRange: -60.0...0.0,
-            defaultValue: -60.0,
-            flags: [.flag_IsReadable, .flag_IsWritable]
         )
     }
 }

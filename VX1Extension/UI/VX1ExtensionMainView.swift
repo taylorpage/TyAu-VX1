@@ -36,26 +36,19 @@ struct VX1ExtensionMainView: View {
                     .frame(width: 8, height: 8)
                     .shadow(color: bypassParam.boolValue ? .clear : Color(red: 0.2, green: 0.8, blue: 1.0).opacity(0.8), radius: 4)
 
-                // VU Meter (output level)
-                VUMeter(param: outputLevelParam, width: 300, height: 160)
+                // VU Meter (gain reduction)
+                VUMeter(param: gainReductionParam, width: 300, height: 160)
                     .padding(.vertical, 4)
 
                 // Main controls grid
                 VStack(spacing: 8) {
-                    // Top row: Gate, Input, Threshold, Ratio
+                    // Top row: Gate, Threshold, Ratio
                     HStack(spacing: 10) {
                         VStack(spacing: 2) {
                             ParameterKnob(param: parameterTree.global.gateThreshold, size: 55)
                             Text("GATE")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.2))
-                        }
-
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.inputGain, size: 55)
-                            Text("INPUT")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 1.0))
                         }
 
                         VStack(spacing: 2) {
@@ -90,7 +83,7 @@ struct VX1ExtensionMainView: View {
                         }
                     }
 
-                    // Third row: Mix, Knee, and Detection
+                    // Third row: Mix and Grip
                     HStack(spacing: 15) {
                         VStack(spacing: 2) {
                             ParameterKnob(param: parameterTree.global.mix, size: 65)
@@ -100,21 +93,14 @@ struct VX1ExtensionMainView: View {
                         }
 
                         VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.knee, size: 65)
-                            Text("KNEE")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.detection, size: 65)
-                            Text("DETECT")
+                            ParameterKnob(param: parameterTree.global.grip, size: 65)
+                            Text("GRIP")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
                         }
                     }
 
-                    // Fourth row: Makeup Gain and Sheen
+                    // Fourth row: Makeup Gain and Bite
                     HStack(spacing: 15) {
                         VStack(spacing: 2) {
                             ParameterKnob(param: parameterTree.global.makeupGain, size: 65)
@@ -124,8 +110,8 @@ struct VX1ExtensionMainView: View {
                         }
 
                         VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.sheen, size: 65)
-                            Text("SHEEN")
+                            ParameterKnob(param: parameterTree.global.bite, size: 65)
+                            Text("BITE")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
                         }
@@ -156,7 +142,7 @@ struct VX1ExtensionMainView: View {
         parameterTree.global.bypass
     }
 
-    var outputLevelParam: ObservableAUParameter {
-        parameterTree.global.outputLevelMeter
+    var gainReductionParam: ObservableAUParameter {
+        parameterTree.global.gainReductionMeter
     }
 }

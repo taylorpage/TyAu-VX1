@@ -28,9 +28,12 @@ public:
         // Initialize computed coefficients
         mThresholdLinear = std::pow(10.0f, mThresholdDb / 20.0f);
         mMakeupGainLinear = std::pow(10.0f, mMakeupGainDb / 20.0f);
-        mInputGainLinear  = std::pow(10.0f, mInputGainDb  / 20.0f);
         mAttackCoeff = std::exp(-1.0f / (mAttackMs * 0.001f * mSampleRate));
         mReleaseCoeff = std::exp(-1.0f / (mReleaseMs * 0.001f * mSampleRate));
+        // RMS detection: ~175ms squared-sample IIR window (averages across syllables, not individual transients)
+        mRmsCoeff = std::exp(-1.0f / (0.175f * (float)mSampleRate));
+        // Peak detection: ~2ms fast attack (aggressive on vocals without distortion artifacts)
+        mInstantCoeff = std::exp(-1.0f / (0.002f * (float)mSampleRate));
 
         // GR overshoot timing (VCA punch): 0.5ms hold, 2ms exponential release
         mOvershootReleaseCoeff = std::exp(-1.0f / (0.002f * (float)mSampleRate));
@@ -53,13 +56,16 @@ public:
 
         // Reset state
         mEnvelopeLevel = 0.0f;
+        mRmsState = 0.0f;
     }
 
     void deInitialize() {
         // Reset all state when deallocating
         mEnvelopeLevel = 0.0f;
         mCurrentGainReductionDb = 0.0f;
-        mCurrentOutputLevelDb = -60.0f;
+
+        // Reset RMS detection state
+        mRmsState = 0.0f;
 
         // Reset sidechain HPF state
         mHpfX1 = mHpfX2 = mHpfY1 = mHpfY2 = 0.0f;
@@ -117,18 +123,11 @@ public:
             case VX1ExtensionParameterAddress::mix:
                 mMixPercent = value;
                 break;
-            case VX1ExtensionParameterAddress::knee:
-                mKneeDb = value;
+            case VX1ExtensionParameterAddress::grip:
+                mGripPercent = value;
                 break;
-            case VX1ExtensionParameterAddress::detection:
-                mDetectionPercent = value;
-                break;
-            case VX1ExtensionParameterAddress::sheen:
-                mSheenPercent = value;
-                break;
-            case VX1ExtensionParameterAddress::inputGain:
-                mInputGainDb = value;
-                mInputGainLinear = std::pow(10.0f, mInputGainDb / 20.0f);
+            case VX1ExtensionParameterAddress::bite:
+                mBitePercent = value;
                 break;
             case VX1ExtensionParameterAddress::gateThreshold:
                 mGateThresholdDb = value;
@@ -152,18 +151,12 @@ public:
                 return (AUValue)(mBypassed ? 1.0f : 0.0f);
             case VX1ExtensionParameterAddress::mix:
                 return (AUValue)mMixPercent;
-            case VX1ExtensionParameterAddress::knee:
-                return (AUValue)mKneeDb;
-            case VX1ExtensionParameterAddress::detection:
-                return (AUValue)mDetectionPercent;
-            case VX1ExtensionParameterAddress::sheen:
-                return (AUValue)mSheenPercent;
+            case VX1ExtensionParameterAddress::grip:
+                return (AUValue)mGripPercent;
+            case VX1ExtensionParameterAddress::bite:
+                return (AUValue)mBitePercent;
             case VX1ExtensionParameterAddress::gainReductionMeter:
                 return (AUValue)mCurrentGainReductionDb;
-            case VX1ExtensionParameterAddress::outputLevelMeter:
-                return (AUValue)mCurrentOutputLevelDb;
-            case VX1ExtensionParameterAddress::inputGain:
-                return (AUValue)mInputGainDb;
             case VX1ExtensionParameterAddress::gateThreshold:
                 return (AUValue)mGateThresholdDb;
             default:
@@ -234,8 +227,8 @@ public:
         // --- Stage 2: Asymmetric wave shaper (2nd harmonic — "sheen/sparkle") ---
         // Small positive DC offset makes the wave shaper clip asymmetrically,
         // generating stronger even harmonics (2nd harmonic = octave above fundamental).
-        float drive     = 1.0f + blend * 3.0f;    // 1.0 at 0% → 4.0 at 100%
-        float dcOffset  = 0.08f * blend;           // offset grows with Sheen amount
+        float drive     = 1.0f + blend * 4.0f;    // 1.0 at 0% → 5.0 at 100%
+        float dcOffset  = 0.18f * blend;           // offset grows with Bite amount
         float driven    = (emphasized + dcOffset) * drive * 1.3f;
         float shaped    = std::tanh(driven);
         float shapedDc  = std::tanh(dcOffset * drive * 1.3f);
@@ -243,9 +236,11 @@ public:
 
         // --- Stage 3: Cubic grit layer (3rd harmonic — "edge") ---
         // x^3 generates 3rd harmonic (two octaves up), sits in 4–12 kHz for vocals.
-        // Low blend keeps it subtle — adds "cuts through glass" without harshness.
+        // Scaled by (1 - blend*0.5) so it fades back at high drive where shaped is
+        // already near clipping — prevents aliasing/intermodulation at top of knob.
         float cubic    = shaped * shaped * shaped;
-        float withGrit = shaped + cubic * 0.06f * blend;
+        float gritAmt  = 0.06f * blend * (1.0f - blend * 0.5f);
+        float withGrit = shaped + cubic * gritAmt;
 
         // --- Stage 1b: De-emphasis high shelf (-5 dB @ 3.5 kHz) ---
         // Restores the tonal balance of the fundamental content.
@@ -258,10 +253,11 @@ public:
         float deEmphasized = withGrit + (deOut - withGrit) * blend;
 
         // --- Stage 4: Gain compensation ---
-        // tanh reduces level at higher drive settings. Previous code applied
-        // (1/drive)*1.2 which left the wet path ~10 dB too quiet at Sheen=100%.
-        // This formula keeps the wet path near unity at all Sheen settings.
-        float compensationGain = 1.0f / (0.5f + 0.5f * blend);
+        // Normalize the wet path back to unity by inverting the tanh's actual ceiling
+        // at the current drive setting. 1/tanh(drive*1.3) exactly compensates for
+        // how much the wave shaper has compressed the signal, keeping perceived level
+        // consistent across the full knob range.
+        float compensationGain = 1.0f / std::tanh(drive * 1.3f);
         deEmphasized *= compensationGain;
 
         // Final dry/wet blend
@@ -352,11 +348,9 @@ public:
                 std::copy_n(inputBuffers[channel], frameCount, outputBuffers[channel]);
             }
             mCurrentGainReductionDb = 0.0f;
-            mCurrentOutputLevelDb = -60.0f;
         } else {
-            // Track peak gain reduction and output level in this buffer
+            // Track peak gain reduction in this buffer
             float peakGainReductionDb = 0.0f;
-            float peakOutputLevel = 0.0f;
 
             // Process each frame
             for (UInt32 frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
@@ -399,47 +393,47 @@ public:
                 }
 
                 // --- Detection: always runs on the current (undelayed) input ---
-                // Input gain applied here so detector sees the hotter driven signal,
-                // forcing more gain reduction at any threshold/ratio setting.
-                // Sidechain signal: mono sum (with input gain) → fixed 80 Hz HPF
+                // Sidechain signal: mono sum → fixed 80 Hz HPF
                 float monoSC = 0.0f;
                 for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
-                    monoSC += inputBuffers[channel][frameIndex] * mGateGain * mInputGainLinear;
+                    monoSC += inputBuffers[channel][frameIndex] * mGateGain;
                 }
                 monoSC /= (float)inputBuffers.size();
                 float filteredSC = applyHpf(monoSC);
                 float absFiltered = std::abs(filteredSC);
 
-                // Peak and RMS both derived from HPF-filtered mono sidechain
+                // Peak detection: instantaneous absolute value — grabs transients hard
                 float peak = absFiltered;
-                float rms  = absFiltered;
 
-                // Blend between RMS and Peak based on detection parameter
-                // 0% = pure Peak, 100% = pure RMS
-                float detectionBlend = mDetectionPercent / 100.0f;
-                float detectionLevel = (peak * (1.0f - detectionBlend)) + (rms * detectionBlend);
+                // RMS detection: IIR squared-sample accumulator (~50ms window)
+                // Responds to energy, not individual peaks — smooth and musical
+                mRmsState = mRmsCoeff * mRmsState + (1.0f - mRmsCoeff) * (absFiltered * absFiltered);
+                float rms = std::sqrt(mRmsState);
 
-                // Envelope follower (attack/release)
-                float coeff = (detectionLevel > mEnvelopeLevel) ? mAttackCoeff : mReleaseCoeff;
+                // Blend detected level: 0% = pure RMS (smooth), 100% = pure Peak (tight/aggressive)
+                float gripBlend = mGripPercent / 100.0f;
+                float detectionLevel = (rms * (1.0f - gripBlend)) + (peak * gripBlend);
+
+                // Dramatic mode difference: envelope attack changes with grip knob
+                // RMS (0%): uses the user's attack knob — compressor breathes with the music
+                // Peak (100%): ~2ms near-instant attack — compressor slams on every transient
+                float blendedAttackCoeff = mAttackCoeff * (1.0f - gripBlend) + mInstantCoeff * gripBlend;
+
+                // Envelope follower (blended attack, fixed release)
+                float coeff = (detectionLevel > mEnvelopeLevel) ? blendedAttackCoeff : mReleaseCoeff;
                 mEnvelopeLevel = coeff * mEnvelopeLevel + (1.0f - coeff) * detectionLevel;
 
-                // Calculate gain reduction with soft knee
+                // Calculate gain reduction (hard knee)
                 float gainReduction = 1.0f;
                 float gainReductionDb = 0.0f;
                 float envelopeDb = 20.0f * std::log10(std::max(mEnvelopeLevel, 1e-6f));
                 float overThresholdDb = envelopeDb - mThresholdDb;
 
-                if (mKneeDb > 0.0f && overThresholdDb > -mKneeDb / 2.0f && overThresholdDb < mKneeDb / 2.0f) {
-                    // Soft knee region: quadratic interpolation
-                    float kneeInput = overThresholdDb + mKneeDb / 2.0f;
-                    gainReductionDb = (kneeInput * kneeInput) / (2.0f * mKneeDb) * (1.0f - 1.0f / mRatio);
-                    gainReduction = std::pow(10.0f, -gainReductionDb / 20.0f);
-                } else if (overThresholdDb > mKneeDb / 2.0f) {
-                    // Above knee: full compression
+                if (overThresholdDb > 0.0f) {
                     gainReductionDb = overThresholdDb * (1.0f - 1.0f / mRatio);
                     gainReduction = std::pow(10.0f, -gainReductionDb / 20.0f);
                 }
-                // else: below knee, gainReduction stays at 1.0
+                // else: below threshold, gainReduction stays at 1.0
 
                 // --- GR Overshoot: VCA-style transient punch ---
                 // Replicates the physical overshoot of a VCA gain cell (dbx 160 / SSL G-bus):
@@ -468,16 +462,13 @@ public:
                 float mixDry = 1.0f - mixWet;
 
                 for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
-                    // Apply gate then input gain to audio path (matches what detector saw)
-                    float currentInput = inputBuffers[channel][frameIndex] * mGateGain * mInputGainLinear;
-
-                    float audioInput = currentInput;
+                    float audioInput = inputBuffers[channel][frameIndex] * mGateGain;
 
                     // Apply compression with VCA overshoot (total GR = compressor GR + overshoot)
                     float compressed = audioInput * gainReductionTotal;
 
                     // Apply sheen saturation (presence-biased harmonic coloration)
-                    float saturated = applySaturation(compressed, mSheenPercent, (int)channel);
+                    float saturated = applySaturation(compressed, mBitePercent, (int)channel);
 
                     // Apply makeup gain
                     saturated *= mMakeupGainLinear;
@@ -485,9 +476,6 @@ public:
                     // Parallel mix: blend dry and processed signals
                     float output = (audioInput * mixDry) + (saturated * mixWet);
                     outputBuffers[channel][frameIndex] = output;
-
-                    // Track peak output level across channels for VU metering
-                    peakOutputLevel = std::max(peakOutputLevel, std::abs(output));
                 }
 
             }
@@ -515,18 +503,6 @@ public:
                 }
             }
 
-            // Update output level meter: fast attack (10ms), slower release (150ms)
-            // Attack is snappy so transients register immediately; release gives smooth fallback.
-            float peakOutputDb = (peakOutputLevel > 1e-6f)
-                ? std::max(-60.0f, 20.0f * std::log10(peakOutputLevel))
-                : -60.0f;
-            if (peakOutputDb > mCurrentOutputLevelDb) {
-                float attackCoeff = std::exp(-1.0f / (0.010f * (float)mSampleRate / (float)frameCount));
-                mCurrentOutputLevelDb = attackCoeff * mCurrentOutputLevelDb + (1.0f - attackCoeff) * peakOutputDb;
-            } else {
-                float releaseCoeff = std::exp(-1.0f / (0.150f * (float)mSampleRate / (float)frameCount));
-                mCurrentOutputLevelDb = releaseCoeff * mCurrentOutputLevelDb + (1.0f - releaseCoeff) * peakOutputDb;
-            }
         }
     }
 
@@ -558,22 +534,21 @@ public:
     float mReleaseMs = 100.0f;
     float mMakeupGainDb = 0.0f;
     float mMixPercent = 100.0f;
-    float mKneeDb = 3.0f;
-    float mDetectionPercent = 100.0f;  // 0% = Peak, 100% = RMS
-    float mSheenPercent = 25.0f;       // 0% = Clean, 100% = Heavy sheen/presence saturation
-    float mInputGainDb = 0.0f;         // Pre-compression input gain: 0 to +24 dB
+    float mGripPercent = 0.0f;    // 0% = RMS (smooth), 100% = Peak (tight/aggressive)
+    float mBitePercent = 25.0f;       // 0% = Clean, 100% = Aggressive presence-biased harmonic bite
 
     // Computed/cached values (linear)
     float mThresholdLinear = 0.1f;  // 10^(thresholdDb/20)
     float mMakeupGainLinear = 1.0f; // 10^(makeupGainDb/20)
-    float mInputGainLinear  = 1.0f; // 10^(inputGainDb/20)
     float mAttackCoeff = 0.0f;      // exp(-1/(attackMs * 0.001 * sampleRate))
     float mReleaseCoeff = 0.0f;     // exp(-1/(releaseMs * 0.001 * sampleRate))
+    float mRmsCoeff = 0.0f;         // exp(-1/(0.175 * sampleRate)) — ~175ms RMS window (vocal syllable averaging)
+    float mInstantCoeff = 0.0f;     // exp(-1/(0.002 * sampleRate)) — ~2ms peak grab (fast but distortion-safe)
 
     // State
     float mEnvelopeLevel = 0.0f;           // Envelope follower state
+    float mRmsState = 0.0f;                // IIR squared-sample accumulator for RMS detection
     float mCurrentGainReductionDb = 0.0f;  // Current gain reduction for metering
-    float mCurrentOutputLevelDb = -60.0f; // Current output level for VU metering (dB)
 
     // Channel count
     int mChannelCount = 2;                 // Set during initialize()

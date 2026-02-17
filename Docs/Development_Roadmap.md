@@ -2,7 +2,7 @@
 
 ## Current Status
 
-### ✅ Implemented Features
+### Implemented Features
 
 1. **Core Compression Engine**
    - Feed-forward compression with gain reduction
@@ -11,34 +11,37 @@
    - Attack (0-200 ms) and Release (5-5000 ms) controls
 
 2. **Advanced Compression Features**
-   - Soft knee (0-12 dB) with quadratic interpolation
+   - Hard knee (fixed) — instant compression at threshold for punchy, assertive character
    - Parallel compression via Mix control (0-100%)
-   - Peak/RMS detection blend (0-100%)
+   - **Grip** — Peak/RMS detection blend with dual-layer envelope interaction
+     - 0% = RMS mode: 175ms IIR window, uses attack knob time — smooth, musical
+     - 100% = Peak mode: 2ms near-instant envelope grab — aggressive, slammy
+     - Both the detected level AND the envelope attack coefficient are blended
 
 3. **Character & Enhancement**
-   - **Sheen saturation** — 4-stage presence-weighted harmonic algorithm (see below)
-   - Even and odd harmonic generation via asymmetric wave shaper + cubic grit layer
-   - Fixed gain compensation formula for audible character at all settings
+   - **Bite saturation** — 4-stage presence-weighted harmonic algorithm
+   - Even harmonics via asymmetric tanh wave shaper (DC offset → 2nd harmonic)
+   - Odd harmonics via cubic grit layer (x³ → 3rd harmonic, self-limiting at high drive)
+   - Drive: 1x–5x, DC offset: 0–0.18, gain compensation: `1/tanh(drive×1.3)` (exact normalization)
 
 4. **Level Control**
-   - **Input Gain** (0 to +24 dB) — pre-compression signal drive ✨ NEW
    - Manual makeup gain (-20 to +50 dB)
    - Bypass functionality
 
 5. **Visual Feedback**
-   - **Gain reduction meter** with smooth ballistics ✅ FULLY WORKING
+   - Gain reduction meter with smooth ballistics
    - Color-coded display (green → yellow → orange → red)
-   - 60 Hz meter updates for responsive feedback
+   - 60 Hz meter updates
    - Meter reflects overshoot GR for accurate visual match to what you hear
 
 6. **DSP Stability & Character**
    - Clean single-pole envelope follower with no abrupt resets
-   - **GR Overshoot / VCA Punch** (internal, no parameter) ✨ NEW — VCA-style transient grab on fast attacks
-   - Fixed host app component lookup
+   - GR Overshoot / VCA Punch (internal, no parameter) — VCA-style transient grab on fast attacks
+   - Noise Gate — pre-compression, prevents noise floor amplification between phrases
 
 ---
 
-## Parameter List (14 parameters, addresses 0–15)
+## Parameter List (11 parameters, addresses 0–14)
 
 | Address | Identifier | Name | Type | Range | Default |
 |---------|-----------|------|------|-------|---------|
@@ -49,159 +52,13 @@
 | 4 | makeupGain | Makeup Gain | dB | -20…+50 | 0 |
 | 5 | bypass | Bypass | bool | 0…1 | 0 |
 | 6 | mix | Mix | % | 0…100 | 100 |
-| 7 | knee | Knee | dB | 0…12 | 3 |
-| 8 | detection | Detection | % | 0…100 | 100 |
-| 9 | sheen | Sheen | % | 0…100 | 25 |
+| 7 | *(reserved)* | — | — | — | — |
+| 8 | grip | Grip | % | 0…100 | 0 |
+| 9 | bite | Bite | % | 0…100 | 25 |
 | 11 | gainReductionMeter | Gain Reduction | dB | 0…60 | 0 (read-only) |
-| 13 | inputGain | Input | dB | 0…24 | 0 |
 | 14 | gateThreshold | Gate | dB | -80…-20 | -80 (off) |
-| 15 | outputLevelMeter | Output Level | dB | -60…0 | -60 (read-only) |
 
----
-
-## Roadmap to JJP-Style Compression
-
-### Phase 1: Core Enhancement (High Priority) - Sprint 1 ✅ COMPLETE
-
-#### 1.1 High-Pass Filter in Sidechain ✅
-- Fixed 80 Hz cutoff — no parameter, always active
-- 2-pole Butterworth (12 dB/oct), bilinear-transform design
-- Runs on a mono sum of the input before the envelope follower
-- Prevents kick/bass energy from pumping vocal compression
-
----
-
-### Phase 2: Professional Features - Sprint 2
-
-#### 2.1 Sheen Saturation ✅
-**Status**: IMPLEMENTED (renamed from "Drive" in last session)
-
-**4-stage presence-weighted harmonic saturation**:
-
-1. **Pre-emphasis**: +5 dB high shelf @ 3.5 kHz before wave shaper — forces harmonics to be generated in the presence/air band
-2. **Asymmetric wave shaper**: `tanh` with DC offset → positive half-cycles clip harder → even harmonics (2nd, 4th) for shimmer/sheen quality
-3. **Cubic grit layer**: `x³` at 6% blend → 3rd harmonic edge (4–12 kHz for vocal fundamentals)
-4. **De-emphasis**: Matching −5 dB shelf cut restores tonal balance; generated harmonics survive above the corner frequency
-
-**Gain compensation fix**: `1 / (0.5 + 0.5×blend)` — the old `(1/drive)×1.2` formula buried the wet signal ~10 dB at Sheen=100%.
-
-**Why this sounds like JJP**:
-- Presence-weighted harmonics concentrated in 3–8 kHz, not the low-mid
-- Even harmonic shimmer (DC offset asymmetry → 2nd harmonic)
-- Controlled grit that makes consonants cut through
-- Character audible at all settings (fixed compensation)
-
-See `Docs/VX1_Saturation_Algorithm.md` for full algorithm documentation.
-
----
-
-#### 2.2 Input Gain ✅ NEW
-**Status**: IMPLEMENTED (address 13)
-
-**What it does**: Pre-compression input gain knob, 0 to +24 dB, default 0 dB.
-
-**Why it matters**:
-- Drives more signal into the compressor, forcing more GR at any threshold/ratio setting
-- This is how engineers "slam" a compressor — hot signal into a tight threshold
-- Applied to BOTH the sidechain detection path AND the audio path simultaneously
-  - The compressor reacts to the hotter signal (correct behavior)
-  - Output level is managed via manual makeup gain
-
-**Implementation**:
-- Applied in `process()`: `monoSC += inputBuffers[channel][frameIndex] * mInputGainLinear;`
-- And: `float currentInput = inputBuffers[channel][frameIndex] * mInputGainLinear;`
-- Linear gain cached: `mInputGainLinear = std::pow(10.0f, mInputGainDb / 20.0f);`
-
-**UI**: INPUT knob in Row 1 alongside Threshold and Ratio (60px, cyan label)
-
----
-
-#### 2.3 GR Overshoot / VCA Punch ✅ NEW
-**Status**: IMPLEMENTED (internal — no user parameter)
-
-**What it does**: When a transient causes GR to jump by >3 dB in a single sample, briefly over-applies an additional 3 dB of GR for ~0.5ms, then exponentially releases the extra GR back to the normal level over ~2ms.
-
-**Why this matters**: VCA gain cells (dbx 160, SSL G-bus) physically overshoot their target GR on fast transients before the feedback loop settles. This creates the "slammed" grab on transients that defines aggressive compressor character. The VX1 now replicates this behavior digitally.
-
-**Internal parameters (computed in `initialize()`)**:
-- Trigger: GR increases >3 dB in one sample
-- Overshoot amount: +3 dB extra GR during hold
-- Hold time: 0.5ms (`mOvershootHoldSamples = 0.0005f × sampleRate`)
-- Release coefficient: `exp(-1 / (0.002f × sampleRate))` → ~2ms exponential decay
-
-**Meter**: Shows `totalGainReductionDb` (includes overshoot) so the meter accurately matches what the listener hears.
-
----
-
-#### 2.4 Noise Gate ✅ NEW
-**Status**: IMPLEMENTED (address 14)
-
-**What it does**: Pre-input-gain noise gate. Monitors the raw input (before any gain staging) and mutes the signal when it drops below threshold, preventing Input Gain and Sheen from amplifying/saturating background noise between vocal phrases.
-
-**Parameters**:
-- Threshold: -80 to -20 dB, default -80 dB (= gate off, no effect)
-
-**Fixed timing (internal)**:
-- Attack: 0.5ms — gate snaps open the instant signal is detected
-- Hold: 50ms — gate stays open after signal drops (prevents chatter on breath pauses)
-- Release: 100ms — smooth exponential close after hold expires
-
-**Implementation**:
-- Peak envelope follower on mono sum of raw (pre-gain) input
-- `mGateGain` scalar (0–1) applied to both sidechain and audio paths before `mInputGainLinear`
-- All timing coefficients computed sample-rate adaptively in `initialize()`
-
-**UI**: GATE knob, Row 1 leftmost, 55px, orange label
-
----
-
-#### 2.5 Input/Output Metering
-**Status**: Not implemented
-- Add input level meter and output level meter
-- Show peak and RMS
-- Benefits: prevent clipping, monitor levels, professional workflow
-
-#### 2.6 Presets System
-**Status**: Not implemented
-- Factory presets (JJP Style, Transparent, Thick, etc.)
-- User preset save/load
-- Benefits: faster workflow, good starting points, marketing/demo value
-
----
-
-### Phase 3: Advanced Features - Sprint 3
-
-#### 3.1 De-esser (Multiband on High Frequencies) ⭐⭐
-**Status**: Not implemented
-- Split signal at ~4-8 kHz
-- Apply separate compression to high band
-- Parameters: De-ess Amount (0-100%), De-ess Frequency (4-10 kHz)
-- JJP Vocals has built-in de-essing
-
-#### 3.2 Mid/Side Processing ⭐
-**Status**: Not implemented
-- M/S encoding/decoding
-- Separate threshold for Mid and Side
-- Parameter: M/S Link (0-100%)
-
-#### 3.3 RMS Window Size Control ⭐
-**Status**: Currently per-sample RMS
-- Add sliding RMS window (1-20 ms)
-- Parameter: RMS Window (Fast 1ms / Medium 5ms / Slow 10ms)
-
----
-
-### Phase 4: Polish & Refinement
-
-#### 4.1 Oversampling ⭐
-**Status**: Not implemented
-- 2x or 4x oversampling option
-- Apply before saturation, downsample after
-- Parameter: Oversampling (Off / 2x / 4x)
-- Reduces aliasing in saturation stage
-
-#### 4.2 Additional Preset Modes
-#### 4.3 UI Refinements
+> Addresses 7, 10, 12, 13 are reserved/removed. Address 7 = knee (removed, hard-coded). Address 10 = autoMakeup (removed). Address 12 = lookAhead (removed). Address 13 = inputGain (removed — redundant with threshold on a character compressor).
 
 ---
 
@@ -210,22 +67,24 @@ See `Docs/VX1_Saturation_Algorithm.md` for full algorithm documentation.
 ```
 Input
   │
-  ├─[Noise Gate — pre-input-gain]
+  ├─[Noise Gate]
   │   raw input → peak envelope follower (0.5ms attack, 50ms hold, 100ms release)
   │   → compare to gateThreshold → mGateGain scalar (0=closed, 1=open)
   │
   ├─[Sidechain — detection only]
-  │   input × mGateGain × inputGainLinear → mono sum
+  │   input × mGateGain → mono sum
   │   → fixed 80 Hz 2-pole Butterworth HPF
-  │   → abs(filtered) → envelope follower (attack/release)
-  │   → GR calculation (threshold, ratio, soft knee)
+  │   → peak (instantaneous abs) and RMS (175ms IIR accumulator)
+  │   → blended by Grip: 0%=RMS, 100%=Peak
+  │   → envelope follower: attack blended by Grip (2ms→user attack), release fixed
+  │   → GR calculation (threshold, ratio, hard knee)
   │   → GR Overshoot check (VCA punch)
   │
   ├─[Audio path]
-  │   input × mGateGain × inputGainLinear → currentInput
+  │   input × mGateGain → audioInput
   │   → gainReductionTotal applied (GR + overshoot)
-  │   → Sheen saturation (4-stage algorithm)
-  │   → makeup gain (manual)
+  │   → Bite saturation (4-stage algorithm)
+  │   → makeup gain
   │   → parallel mix (dry/wet blend)
   │
   └─ Output
@@ -233,65 +92,31 @@ Input
 
 ---
 
-## JJP Vocal Feature Comparison
+## DSP Design Notes
 
-### What JJP Vocals Has:
-1. ✅ Compression (we have this)
-2. ✅ Saturation/Attitude (Sheen — 4-stage harmonic algorithm)
-3. ✅ Parallel processing (Mix)
-4. ✅ Input drive / signal slamming (Input Gain)
-6. ✅ VCA transient grab (GR Overshoot)
-7. ❌ De-esser (Sprint 3)
-8. ✅ Sidechain filtering (80 Hz HPF, always on)
-9. ⚠️ Multiple preset modes (planned — Sprint 2)
-10. ❌ Reverb/Space (out of scope for compressor)
-11. ❌ Pitch correction (out of scope)
+### Grip — Dual-Layer Detection
+The Grip knob does two things simultaneously:
+1. Blends the detected level between RMS (175ms window, responds to energy) and Peak (instantaneous)
+2. Blends the envelope follower's attack coefficient between the user's attack knob and a fixed 2ms "instant" attack
 
-### What We Have That JJP Doesn't:
-1. ✅ Adjustable soft knee (0-12 dB)
-2. ✅ Peak/RMS detection blend
-3. ✅ Wider parameter ranges
-4. ✅ Visual gain reduction metering
-5. ✅ Noise gate (pre-input-gain, prevents noise floor amplification)
+At Grip=0% (RMS), the compressor cannot grab a transient faster than the attack knob allows. At Grip=100% (Peak), it grabs in 2ms regardless of the attack setting. The combined effect is dramatic and audible across the full range.
 
----
+### Bite — Presence-Biased Harmonic Saturation
+Four-stage algorithm runs post-compression:
+1. **Pre-emphasis**: +5 dB shelf @ 3.5 kHz — biases harmonic generation toward presence/air band
+2. **Asymmetric wave shaper**: tanh with DC offset (0–0.18) — generates 2nd harmonic (octave shimmer)
+3. **Cubic grit**: x³ scaled by `0.06 × blend × (1 - blend×0.5)` — self-limiting at high drive to prevent intermodulation
+4. **De-emphasis**: matching -5 dB shelf — restores tonal balance; harmonics survive above corner
+5. **Gain compensation**: `1/tanh(drive×1.3)` — exact normalization at any drive setting
 
-## Sprint Status
+Drive range: 1x (0%) → 5x (100%). The cubic grit term scales back in the upper knob range to prevent aliasing artifacts.
 
-### Sprint 1 ✅ COMPLETE
-1. ✅ Gain Reduction Meter
-2. ✅ DSP Stability (no pops)
-
-### Sprint 2 (In Progress)
-1. ✅ Sidechain HPF — fixed 80 Hz, always on
-2. ✅ Sheen Saturation — 4-stage JJP presence algorithm
-3. ✅ Input Gain — pre-compression drive (address 13)
-4. ✅ GR Overshoot — VCA punch (internal)
-5. ✅ Noise Gate — pre-input-gain, threshold knob (address 14)
-6. ⬜ Input/Output Metering
-7. ⬜ Presets System
-
-### Sprint 3 (Planned)
-1. De-esser
-2. RMS Window Control
-3. Mid/Side Processing
+### GR Overshoot / VCA Punch
+When GR jumps >3 dB in one sample: +3 dB extra GR applied for 0.5ms hold, then exponentially released over 2ms. Replicates VCA gain cell physical overshoot (dbx 160 / SSL G-bus character).
 
 ---
 
-## Architecture Notes
-
-- All DSP is in `VX1Extension/DSP/VX1ExtensionDSPKernel.hpp` (C++ class, render-thread safe)
-- All parameters use `VX1ExtensionParameterAddress` enum (C header shared with Swift via bridging)
-- UI uses SwiftUI with `ParameterKnob`, `GainReductionMeter`, `BypassButton` components
-- 60Hz meter timer in `VX1ExtensionAudioUnit.swift`
-- Host latency reported via `latency` override in same file
-- Ring buffer always allocated at max capacity (never mid-stream realloc)
-- All filter coefficients computed in `initialize()` — correct across 44.1/48/96 kHz
-- **14 parameters** (addresses 0–15, address 10 reserved); gainReductionMeter and outputLevelMeter are read-only
-
----
-
-## Current UI Layout
+## UI Layout
 
 Window: 350×580px, dark gradient background.
 
@@ -299,13 +124,29 @@ Window: 350×580px, dark gradient background.
 [Title: VX1 COMPRESSOR]
 [LED indicator]
 [Gain Reduction Meter]
-Row 1: [GATE 55px]  [INPUT 55px]  [THRESHOLD 55px]  [RATIO 55px]  (spacing 10px)
+Row 1: [GATE 55px]  [THRESHOLD 55px]  [RATIO 55px]  (spacing 10px, GATE label is orange)
 Row 2: [ATTACK 65px]    [RELEASE 65px]
-Row 3: [MIX 65px]       [KNEE 65px]       [DETECT 65px]
-Row 4: [MAKEUP 65px]    [SHEEN 65px]
+Row 3: [MIX 65px]       [GRIP 65px]
+Row 4: [MAKEUP 65px]    [BITE 65px]
 [BYPASS button]
 [TaylorAudio logo]
 ```
+
+---
+
+## Roadmap
+
+### Phase 2 — Remaining
+- Input/Output level metering
+- Preset system
+
+### Phase 3 — Planned
+- De-esser (multiband, 4–10 kHz)
+- Mid/Side processing
+
+### Phase 4 — Polish
+- 2x/4x oversampling (reduces Bite aliasing at extreme settings)
+- Additional UI refinements
 
 ---
 
@@ -315,23 +156,7 @@ Row 4: [MAKEUP 65px]    [SHEEN 65px]
 - **Parameters**: `VX1Extension/Parameters/Parameters.swift`
 - **Parameter Addresses**: `VX1Extension/Parameters/VX1ExtensionParameterAddresses.h`
 - **UI**: `VX1Extension/UI/VX1ExtensionMainView.swift`
-- **Algorithm Docs**: `Docs/VX1_Saturation_Algorithm.md`
 - **Session State**: `Docs/Session_Context.md`
-
----
-
-## Performance Considerations
-
-### Current Performance
-- Per-sample processing (no SIMD yet)
-- Simple algorithms (tanh, sqrt, log10, pow)
-- Runs efficiently on modern CPUs
-
-### Optimization Opportunities
-1. SIMD vectorization for multi-channel processing
-2. Look-up tables for tanh saturation
-3. Parallel processing for independent channels
-4. Lazy parameter updates (only recalculate when changed)
 
 ---
 
@@ -339,47 +164,12 @@ Row 4: [MAKEUP 65px]    [SHEEN 65px]
 
 ### Before Each Release
 - [ ] Test at 44.1 kHz, 48 kHz, 96 kHz
-- [ ] Test mono and stereo operation
+- [ ] Test mono and stereo
 - [ ] Verify no audio dropouts or glitches
 - [ ] Check parameter automation works smoothly
-- [ ] A/B against reference compressors (JJP Vocals, CLA-76, etc.)
-- [ ] Test extreme parameter settings (Input +24 dB, Sheen 100%, etc.)
+- [ ] A/B against reference compressors (JJP Vocals, CLA-76)
+- [ ] Test extreme parameter settings (Bite 100%, Grip 100%, etc.)
 - [ ] Verify bypass works correctly
-- [ ] Check CPU usage is reasonable
 - [ ] Confirm meter shows overshoot spikes on fast transients
-
----
-
-## Long-Term Vision
-
-### Version 1.0 (Current + Sprint 2)
-- Solid vocal compressor with full JJP-style feature set
-- Input drive, VCA punch, 4-stage Sheen, metering
-- Preset system with good factory presets
-
-### Version 1.5 (+ Sprint 3)
-- De-esser for complete vocal processing
-- M/S processing for stereo control
-- Professional-grade feature set
-
-### Version 2.0 (Future)
-- Multi-band compression option
-- Advanced metering and visualization
-- Multiple compressor modes (VCA, Opto, FET, etc.)
-- External sidechain input
-
----
-
-## Resources & References
-
-### Inspiration
-- Waves JJP Vocals
-- CLA-76 (fast attack compressor)
-- SSL Bus Compressor (parallel compression pioneer)
-- LA-2A (smooth optical compression)
-- dbx 160 (VCA design, transient overshoot behavior)
-
-### Technical References
-- [DAFX - Digital Audio Effects](https://www.dafx.de/) - Compression algorithms
-- [Julius O. Smith - Audio DSP](https://ccrma.stanford.edu/~jos/) - Envelope followers
-- [Designing Audio Effect Plugins in C++](https://www.willpirkle.com/) - Plugin architecture
+- [ ] Confirm Grip knob sweep is audibly smooth and linear end-to-end
+- [ ] Confirm Bite knob sweep is audibly smooth with no wobble or artifacts

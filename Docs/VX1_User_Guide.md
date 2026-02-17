@@ -66,18 +66,6 @@ Input × InputGain → Detection (HPF → envelope) → GR + Overshoot → Satur
   - **Aggressive**: 8:1 to 15:1 (JJP-style)
   - **Limiting**: 20:1 to 30:1 (brick wall)
 
-#### **Knee** (0 dB to 12 dB)
-- **What it does**: Smooths the transition around the threshold
-- **Default**: 3 dB
-- **How it works**:
-  - 0 dB = hard knee (instant compression at threshold)
-  - Higher values = gradual compression onset
-  - Uses quadratic interpolation for musical response
-- **Sweet spots**:
-  - **Punchy/Obvious**: 0-2 dB
-  - **Balanced**: 3-6 dB (most musical)
-  - **Smooth/Transparent**: 8-12 dB
-
 ---
 
 ### Dynamics Control
@@ -194,7 +182,6 @@ Threshold:    -35 dB
 Ratio:        10:1
 Attack:       2 ms
 Release:      150 ms
-Knee:         4 dB
 Detection:    40% (peak-heavy)
 Sheen:        50%
 Makeup Gain:  +5 dB
@@ -215,14 +202,13 @@ Threshold:    -15 dB
 Ratio:        3:1
 Attack:       30 ms
 Release:      300 ms
-Knee:         8 dB
 Detection:    80% (RMS-heavy)
 Sheen:        15%
 Makeup Gain:  +4 dB
 Mix:          100%
 ```
 
-**Why it works**: Moderate threshold, gentle ratio, large knee for smooth transition, RMS detection for natural feel, minimal Sheen keeps the sound transparent.
+**Why it works**: Moderate threshold, gentle ratio, slow attack to let transients breathe, RMS detection for natural feel, minimal Sheen keeps the sound transparent.
 
 ---
 
@@ -234,7 +220,6 @@ Threshold:    -30 dB
 Ratio:        8:1
 Attack:       5 ms
 Release:      100 ms
-Knee:         3 dB
 Detection:    50%
 Sheen:        35%
 Makeup Gain:  0 dB
@@ -255,7 +240,6 @@ Threshold:    -40 dB
 Ratio:        15:1
 Attack:       1 ms
 Release:      80 ms
-Knee:         2 dB
 Detection:    20% (peak-dominant)
 Sheen:        60%
 Makeup Gain:  +15 dB
@@ -274,14 +258,13 @@ Threshold:    -25 dB
 Ratio:        4:1
 Attack:       20 ms
 Release:      800 ms
-Knee:         10 dB
 Detection:    90% (RMS)
 Sheen:        20%
 Makeup Gain:  +6 dB
 Mix:          100%
 ```
 
-**Why it works**: Gentle compression with slow release smooths performance, large knee prevents obvious compression, minimal Sheen keeps it clean.
+**Why it works**: Gentle compression with slow release smooths performance, high RMS detection for natural feel, minimal Sheen keeps it clean.
 
 ---
 
@@ -303,8 +286,6 @@ Mix:          100%
 - **Too much compression + too much drive**: Creates harsh, pumping artifacts
 - **Attack too fast with 100% mix**: Kills transients, sounds lifeless
 - **Release too short**: Creates obvious pumping
-- **Knee too small with high ratio**: Sounds unnatural and obvious
-
 ### A/B Comparison Tips
 
 1. Set Makeup Gain to match perceived loudness
@@ -321,10 +302,8 @@ Mix:          100%
 - Feeds into exponential envelope follower with separate attack/release
 
 ### Compression Curve
-- Hard knee: Instant compression at threshold
-- Soft knee: Quadratic interpolation within knee range
-  - Formula: `gainReductionDb = (x²) / (2 * knee) * (1 - 1/ratio)`
-- Above knee: Linear compression based on ratio
+- Hard knee (fixed): Instant compression at threshold — gain reduction begins the moment the signal exceeds threshold
+- Formula above threshold: `gainReductionDb = overThresholdDb * (1 - 1/ratio)`
 
 ### Sheen Saturation Algorithm
 - 4-stage presence-weighted harmonic saturation
@@ -396,11 +375,6 @@ The VX1 achieves the classic JJP vocal sound through a specific combination of f
 - Increasing Input Gain is equivalent to moving threshold down — both force more GR
 - Use Input Gain when you want more slam without changing the threshold/ratio relationship
 - At high Input Gain, watch the meter and adjust Makeup Gain to compensate for level changes
-
-### Knee + Ratio
-- Small knee + high ratio = obvious, grabby compression
-- Large knee + high ratio = smooth compression that sneaks in
-- Large knee + low ratio = very transparent
 
 ---
 
