@@ -16,7 +16,7 @@ Built with: Swift (AU host + UI), C++ (DSP kernel), SwiftUI.
 
 ---
 
-## Current Parameter List (15 parameters, addresses 0–14)
+## Current Parameter List (14 parameters, addresses 0–15)
 
 | Address | Identifier | Name | Type | Range | Default |
 |---------|-----------|------|------|-------|---------|
@@ -30,13 +30,12 @@ Built with: Swift (AU host + UI), C++ (DSP kernel), SwiftUI.
 | 7 | knee | Knee | dB | 0…12 | 3 |
 | 8 | detection | Detection | % | 0…100 | 100 |
 | 9 | sheen | Sheen | % | 0…100 | 25 |
-| 10 | autoMakeup | Auto Makeup | bool | 0…1 | 0 |
 | 11 | gainReductionMeter | Gain Reduction | dB | 0…60 | 0 (read-only) |
-| 12 | lookAhead | Look-Ahead | indexed | 0…3 | 0 (Off/2ms/5ms/10ms) |
 | 13 | inputGain | Input | dB | 0…24 | 0 |
 | 14 | gateThreshold | Gate | dB | -80…-20 | -80 (off) |
+| 15 | outputLevelMeter | Output Level | dB | -60…0 | -60 (read-only) |
 
-> Note: `drive` was renamed to `sheen` in Sprint 2. `inputGain` (address 13) is fully implemented. `gateThreshold` (address 14) default of -80 dB = gate disabled.
+> Note: `drive` was renamed to `sheen` in Sprint 2. `inputGain` (address 13) is fully implemented. `gateThreshold` (address 14) default of -80 dB = gate disabled. Addresses 10 and 12 are reserved (previously autoMakeup and lookAhead, removed).
 
 ---
 
@@ -83,10 +82,9 @@ Input
   │
   ├─[Audio path]
   │   input × mGateGain × mInputGainLinear → currentInput
-  │   → ring buffer delay (look-ahead: 0/2/5/10ms)
   │   → gainReductionTotal applied (GR + mOvershootDb)
   │   → Sheen saturation (4-stage algorithm — see below)
-  │   → makeup gain (manual × auto)
+  │   → makeup gain (manual)
   │   → parallel mix (dry/wet blend)
   │
   └─ Output
@@ -131,12 +129,6 @@ Input
 - State: `mPrevGainReductionDb`, `mOvershootDb`, `mOvershootReleaseCoeff`, `mOvershootHoldSamples`, `mOvershootHoldCounter`
 - Coefficients computed in `initialize()`: sample-rate adaptive
 
-### Look-Ahead (address 12)
-- Off / 2ms / 5ms / 10ms fixed steps
-- Ring buffer pre-allocated to max 10ms, never reallocated mid-stream
-- Detection runs on undelayed input; audio path delayed by ring buffer
-- Host latency reported via `VX1ExtensionAudioUnit.latency` override
-
 ### Sidechain HPF (always on, no parameter)
 - Fixed 80 Hz, 2-pole Butterworth (12 dB/oct)
 - Applied to mono sum of input (with input gain applied) before envelope follower
@@ -154,11 +146,6 @@ Four-stage presence-weighted harmonic saturation:
 - State: per-channel `mPreX1/Y1`, `mDeX1/Y1` vectors
 - Coefficients: `computePresenceCoefficients()` in DSP kernel
 - Full docs: `Docs/VX1_Saturation_Algorithm.md`
-
-### Auto Makeup Gain (address 10)
-- Tracks average GR with 100ms smoothing
-- Adds 80% of average GR as makeup (intentional under-compensation for punch)
-- Multiplicative with manual makeup gain
 
 ### Gain Reduction Meter (address 11, read-only)
 - Updated at 60Hz via timer in `VX1ExtensionAudioUnit.swift`
@@ -180,8 +167,6 @@ Row 1: [GATE 55px]  [INPUT 55px]  [THRESHOLD 55px]  [RATIO 55px]  (spacing 10px,
 Row 2: [ATTACK 65px]    [RELEASE 65px]
 Row 3: [MIX 65px]       [KNEE 65px]       [DETECT 65px]
 Row 4: [MAKEUP 65px]    [SHEEN 65px]
-       └[AUTO toggle]
-Row 5: [LOOK-AHEAD segmented: Off / 2ms / 5ms / 10ms]
 [BYPASS button]
 [TaylorAudio logo]
 ```
@@ -191,10 +176,8 @@ Row 5: [LOOK-AHEAD segmented: Off / 2ms / 5ms / 10ms]
 ## Sprint Status
 
 ### Sprint 1 ✅ COMPLETE
-1. ✅ Auto Makeup Gain
-2. ✅ Gain Reduction Meter
-3. ✅ DSP Stability (no pops)
-4. ✅ Look-Ahead with ring buffer + host latency
+1. ✅ Gain Reduction Meter
+2. ✅ DSP Stability (no pops)
 
 ### Sprint 2 (In Progress)
 1. ✅ Sidechain HPF — fixed 80 Hz, always on
@@ -221,7 +204,7 @@ Row 5: [LOOK-AHEAD segmented: Off / 2ms / 5ms / 10ms]
 - Host latency reported via `latency` override in same file
 - Ring buffer always allocated at max capacity (never mid-stream realloc)
 - All filter coefficients computed in `initialize()` — correct across 44.1/48/96 kHz
-- **15 parameters** (addresses 0–14); gainReductionMeter (address 11) is read-only
+- **13 parameters** (addresses 0–15, addresses 10 and 12 reserved); gainReductionMeter (address 11) and outputLevelMeter (address 15) are read-only
 
 ---
 

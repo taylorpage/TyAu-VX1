@@ -41,13 +41,6 @@ public:
         mGateReleaseCoeff = std::exp(-1.0f / (0.100f  * (float)mSampleRate));
         mGateHoldSamples  = static_cast<int>(0.050f   * mSampleRate);
 
-        // Allocate look-ahead ring buffer: max 10ms at current sample rate, per channel
-        // Always allocate max capacity so we never reallocate mid-stream
-        int maxLookAheadSamples = static_cast<int>(std::ceil(0.010 * mSampleRate));
-        mRingBuffer.assign(inputChannelCount, std::vector<float>(maxLookAheadSamples, 0.0f));
-        mRingWritePos = 0;
-        mLookAheadSamples = lookAheadIndexToSamples(mLookAheadIndex);
-
         // Compute sidechain HPF coefficients for current sample rate
         computeHpfCoefficients();
 
@@ -65,11 +58,8 @@ public:
     void deInitialize() {
         // Reset all state when deallocating
         mEnvelopeLevel = 0.0f;
-        mAvgGainReductionDb = 0.0f;
         mCurrentGainReductionDb = 0.0f;
         mCurrentOutputLevelDb = -60.0f;
-        mRingBuffer.clear();
-        mRingWritePos = 0;
 
         // Reset sidechain HPF state
         mHpfX1 = mHpfX2 = mHpfY1 = mHpfY2 = 0.0f;
@@ -136,13 +126,6 @@ public:
             case VX1ExtensionParameterAddress::sheen:
                 mSheenPercent = value;
                 break;
-            case VX1ExtensionParameterAddress::autoMakeup:
-                mAutoMakeupEnabled = (value >= 0.5f);
-                break;
-            case VX1ExtensionParameterAddress::lookAhead:
-                mLookAheadIndex = static_cast<int>(value + 0.5f);
-                mLookAheadSamples = lookAheadIndexToSamples(mLookAheadIndex);
-                break;
             case VX1ExtensionParameterAddress::inputGain:
                 mInputGainDb = value;
                 mInputGainLinear = std::pow(10.0f, mInputGainDb / 20.0f);
@@ -175,14 +158,10 @@ public:
                 return (AUValue)mDetectionPercent;
             case VX1ExtensionParameterAddress::sheen:
                 return (AUValue)mSheenPercent;
-            case VX1ExtensionParameterAddress::autoMakeup:
-                return (AUValue)(mAutoMakeupEnabled ? 1.0f : 0.0f);
             case VX1ExtensionParameterAddress::gainReductionMeter:
                 return (AUValue)mCurrentGainReductionDb;
             case VX1ExtensionParameterAddress::outputLevelMeter:
                 return (AUValue)mCurrentOutputLevelDb;
-            case VX1ExtensionParameterAddress::lookAhead:
-                return (AUValue)mLookAheadIndex;
             case VX1ExtensionParameterAddress::inputGain:
                 return (AUValue)mInputGainDb;
             case VX1ExtensionParameterAddress::gateThreshold:
@@ -204,21 +183,6 @@ public:
     // MARK: - Musical Context
     void setMusicalContextBlock(AUHostMusicalContextBlock contextBlock) {
         mMusicalContextBlock = contextBlock;
-    }
-
-    // MARK: - Look-Ahead Helper
-
-    /// Returns the look-ahead delay in samples for the given step index.
-    /// Steps: 0=Off (0ms), 1=2ms, 2=5ms, 3=10ms
-    int lookAheadIndexToSamples(int index) const {
-        static const float kStepMs[4] = { 0.0f, 2.0f, 5.0f, 10.0f };
-        int clamped = std::max(0, std::min(3, index));
-        return static_cast<int>(kStepMs[clamped] * 0.001f * mSampleRate);
-    }
-
-    /// Returns the current look-ahead time in seconds (used for host latency reporting).
-    double lookAheadSeconds() const {
-        return lookAheadIndexToSamples(mLookAheadIndex) / mSampleRate;
     }
 
     // MARK: - Sheen Saturation
@@ -394,10 +358,6 @@ public:
             float peakGainReductionDb = 0.0f;
             float peakOutputLevel = 0.0f;
 
-            const int lookAheadSamples = mLookAheadSamples;
-            const bool usingLookAhead = (lookAheadSamples > 0) && !mRingBuffer.empty();
-            const int ringSize = usingLookAhead ? static_cast<int>(mRingBuffer[0].size()) : 0;
-
             // Process each frame
             for (UInt32 frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
 
@@ -500,22 +460,8 @@ public:
                 float totalGainReductionDb = gainReductionDb + mOvershootDb;
                 float gainReductionTotal = std::pow(10.0f, -totalGainReductionDb / 20.0f);
 
-                // Track average gain reduction for auto makeup (smoothed with slow release)
-                // Time constant of ~100ms for smooth tracking
-                float avgCoeff = std::exp(-1.0f / (100.0f * 0.001f * mSampleRate));
-                mAvgGainReductionDb = avgCoeff * mAvgGainReductionDb + (1.0f - avgCoeff) * gainReductionDb;
-
                 // Track peak gain reduction for metering (includes overshoot — meter shows what you hear)
                 peakGainReductionDb = std::max(peakGainReductionDb, totalGainReductionDb);
-
-                // Calculate total makeup gain (manual + auto)
-                float totalMakeupGainLinear = mMakeupGainLinear;
-                if (mAutoMakeupEnabled) {
-                    // Auto makeup compensates 80% of average gain reduction
-                    float autoMakeupDb = mAvgGainReductionDb * 0.8f;
-                    float autoMakeupLinear = std::pow(10.0f, autoMakeupDb / 20.0f);
-                    totalMakeupGainLinear *= autoMakeupLinear;
-                }
 
                 // Apply compression, saturation, makeup gain, then mix with dry signal
                 float mixWet = mMixPercent / 100.0f;
@@ -525,17 +471,7 @@ public:
                     // Apply gate then input gain to audio path (matches what detector saw)
                     float currentInput = inputBuffers[channel][frameIndex] * mGateGain * mInputGainLinear;
 
-                    // --- Look-ahead: audio path uses the delayed sample from the ring buffer ---
-                    float audioInput;
-                    if (usingLookAhead) {
-                        // Read the oldest sample (delayed by lookAheadSamples)
-                        int readPos = (mRingWritePos - lookAheadSamples + ringSize) % ringSize;
-                        audioInput = mRingBuffer[channel][readPos];
-                        // Write the gained input into the ring buffer
-                        mRingBuffer[channel][mRingWritePos] = currentInput;
-                    } else {
-                        audioInput = currentInput;
-                    }
+                    float audioInput = currentInput;
 
                     // Apply compression with VCA overshoot (total GR = compressor GR + overshoot)
                     float compressed = audioInput * gainReductionTotal;
@@ -543,11 +479,10 @@ public:
                     // Apply sheen saturation (presence-biased harmonic coloration)
                     float saturated = applySaturation(compressed, mSheenPercent, (int)channel);
 
-                    // Apply makeup gain (manual + auto)
-                    saturated *= totalMakeupGainLinear;
+                    // Apply makeup gain
+                    saturated *= mMakeupGainLinear;
 
                     // Parallel mix: blend dry and processed signals
-                    // Dry signal is also the delayed audio so timing stays aligned
                     float output = (audioInput * mixDry) + (saturated * mixWet);
                     outputBuffers[channel][frameIndex] = output;
 
@@ -555,10 +490,6 @@ public:
                     peakOutputLevel = std::max(peakOutputLevel, std::abs(output));
                 }
 
-                // Advance ring buffer write position once per frame (after all channels)
-                if (usingLookAhead) {
-                    mRingWritePos = (mRingWritePos + 1) % ringSize;
-                }
             }
 
             // Update meter with peak gain reduction from this buffer
@@ -630,7 +561,6 @@ public:
     float mKneeDb = 3.0f;
     float mDetectionPercent = 100.0f;  // 0% = Peak, 100% = RMS
     float mSheenPercent = 25.0f;       // 0% = Clean, 100% = Heavy sheen/presence saturation
-    bool mAutoMakeupEnabled = false;   // Auto makeup gain toggle
     float mInputGainDb = 0.0f;         // Pre-compression input gain: 0 to +24 dB
 
     // Computed/cached values (linear)
@@ -642,16 +572,11 @@ public:
 
     // State
     float mEnvelopeLevel = 0.0f;           // Envelope follower state
-    float mAvgGainReductionDb = 0.0f;      // Smoothed average gain reduction for auto makeup
     float mCurrentGainReductionDb = 0.0f;  // Current gain reduction for metering
     float mCurrentOutputLevelDb = -60.0f; // Current output level for VU metering (dB)
 
-    // Look-ahead
-    int mLookAheadIndex = 0;               // 0=Off, 1=2ms, 2=5ms, 3=10ms
-    int mLookAheadSamples = 0;             // Derived sample count from index
+    // Channel count
     int mChannelCount = 2;                 // Set during initialize()
-    std::vector<std::vector<float>> mRingBuffer; // Per-channel delay line [channel][sample]
-    int mRingWritePos = 0;                 // Current write position in ring buffer
 
     // Sidechain HPF — fixed 80 Hz 2-pole Butterworth, detection path only
     float mHpfX1 = 0.0f, mHpfX2 = 0.0f;  // input delay history

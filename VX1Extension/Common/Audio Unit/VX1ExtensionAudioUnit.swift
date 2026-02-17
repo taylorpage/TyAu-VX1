@@ -56,11 +56,6 @@ public class VX1ExtensionAudioUnit: AUAudioUnit, @unchecked Sendable
         ] as [NSNumber]
     }
 
-    /// Report look-ahead latency to the host so the DAW can compensate timeline alignment.
-    public override var latency: TimeInterval {
-        return kernel.lookAheadSeconds()
-    }
-
     public override var  maximumFramesToRender: AUAudioFrameCount {
         get {
             return kernel.maximumFramesToRender()

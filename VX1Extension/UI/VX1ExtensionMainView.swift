@@ -121,22 +121,6 @@ struct VX1ExtensionMainView: View {
                             Text("MAKEUP")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
-
-                            // Auto makeup toggle
-                            Toggle(isOn: Binding(
-                                get: { autoMakeupParam.boolValue },
-                                set: { newValue in
-                                    autoMakeupParam.onEditingChanged(true)
-                                    autoMakeupParam.boolValue = newValue
-                                    autoMakeupParam.onEditingChanged(false)
-                                }
-                            )) {
-                                Text("AUTO")
-                                    .font(.system(size: 7, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-                            .toggleStyle(.switch)
-                            .scaleEffect(0.6)
                         }
 
                         VStack(spacing: 2) {
@@ -147,29 +131,6 @@ struct VX1ExtensionMainView: View {
                         }
                     }
 
-                    // Fifth row: Look-Ahead
-                    VStack(spacing: 4) {
-                        Text("LOOK-AHEAD")
-                            .font(.system(size: 8, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.8))
-                        Picker("", selection: Binding(
-                            get: { Int(lookAheadParam.value) },
-                            set: { newValue in
-                                lookAheadParam.onEditingChanged(true)
-                                lookAheadParam.value = Float(newValue)
-                                lookAheadParam.onEditingChanged(false)
-                            }
-                        )) {
-                            Text("Off").tag(0)
-                            Text("2ms").tag(1)
-                            Text("5ms").tag(2)
-                            Text("10ms").tag(3)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 220)
-                        .colorMultiply(Color(red: 0.2, green: 0.8, blue: 1.0))
-                    }
-                    .padding(.top, 4)
                 }
                 .padding(.vertical, 5)
 
@@ -195,15 +156,7 @@ struct VX1ExtensionMainView: View {
         parameterTree.global.bypass
     }
 
-    var autoMakeupParam: ObservableAUParameter {
-        parameterTree.global.autoMakeup
-    }
-
     var outputLevelParam: ObservableAUParameter {
         parameterTree.global.outputLevelMeter
-    }
-
-    var lookAheadParam: ObservableAUParameter {
-        parameterTree.global.lookAhead
     }
 }

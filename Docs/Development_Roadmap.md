@@ -23,7 +23,6 @@
 4. **Level Control**
    - **Input Gain** (0 to +24 dB) — pre-compression signal drive ✨ NEW
    - Manual makeup gain (-20 to +50 dB)
-   - **Auto makeup gain** (toggleable, compensates 80% of average GR)
    - Bypass functionality
 
 5. **Visual Feedback**
@@ -39,7 +38,7 @@
 
 ---
 
-## Parameter List (15 parameters, addresses 0–14)
+## Parameter List (14 parameters, addresses 0–15)
 
 | Address | Identifier | Name | Type | Range | Default |
 |---------|-----------|------|------|-------|---------|
@@ -53,11 +52,10 @@
 | 7 | knee | Knee | dB | 0…12 | 3 |
 | 8 | detection | Detection | % | 0…100 | 100 |
 | 9 | sheen | Sheen | % | 0…100 | 25 |
-| 10 | autoMakeup | Auto Makeup | bool | 0…1 | 0 |
 | 11 | gainReductionMeter | Gain Reduction | dB | 0…60 | 0 (read-only) |
-| 12 | lookAhead | Look-Ahead | indexed | 0…3 | 0 (Off/2ms/5ms/10ms) |
 | 13 | inputGain | Input | dB | 0…24 | 0 |
 | 14 | gateThreshold | Gate | dB | -80…-20 | -80 (off) |
+| 15 | outputLevelMeter | Output Level | dB | -60…0 | -60 (read-only) |
 
 ---
 
@@ -65,17 +63,7 @@
 
 ### Phase 1: Core Enhancement (High Priority) - Sprint 1 ✅ COMPLETE
 
-#### 1.1 Auto Makeup Gain ✅
-- Tracks average GR with 100ms smoothing, adds 80% of average GR as makeup
-- Toggle switch below Makeup knob
-- Works multiplicatively with manual makeup gain
-
-#### 1.2 Look-Ahead ✅
-- Fixed-step control: Off / 2ms / 5ms / 10ms
-- Ring buffer allocated once at `initialize()`, never mid-stream
-- Host latency reported via `AUAudioUnit.latency`
-
-#### 1.3 High-Pass Filter in Sidechain ✅
+#### 1.1 High-Pass Filter in Sidechain ✅
 - Fixed 80 Hz cutoff — no parameter, always active
 - 2-pole Butterworth (12 dB/oct), bilinear-transform design
 - Runs on a mono sum of the input before the envelope follower
@@ -117,7 +105,7 @@ See `Docs/VX1_Saturation_Algorithm.md` for full algorithm documentation.
 - This is how engineers "slam" a compressor — hot signal into a tight threshold
 - Applied to BOTH the sidechain detection path AND the audio path simultaneously
   - The compressor reacts to the hotter signal (correct behavior)
-  - Output level is automatically managed via auto makeup or manual makeup gain
+  - Output level is managed via manual makeup gain
 
 **Implementation**:
 - Applied in `process()`: `monoSC += inputBuffers[channel][frameIndex] * mInputGainLinear;`
@@ -235,10 +223,9 @@ Input
   │
   ├─[Audio path]
   │   input × mGateGain × inputGainLinear → currentInput
-  │   → ring buffer delay (look-ahead: 0/2/5/10ms)
   │   → gainReductionTotal applied (GR + overshoot)
   │   → Sheen saturation (4-stage algorithm)
-  │   → makeup gain (manual × auto)
+  │   → makeup gain (manual)
   │   → parallel mix (dry/wet blend)
   │
   └─ Output
@@ -252,8 +239,7 @@ Input
 1. ✅ Compression (we have this)
 2. ✅ Saturation/Attitude (Sheen — 4-stage harmonic algorithm)
 3. ✅ Parallel processing (Mix)
-4. ✅ Auto makeup gain (80% compensation)
-5. ✅ Input drive / signal slamming (Input Gain)
+4. ✅ Input drive / signal slamming (Input Gain)
 6. ✅ VCA transient grab (GR Overshoot)
 7. ❌ De-esser (Sprint 3)
 8. ✅ Sidechain filtering (80 Hz HPF, always on)
@@ -266,18 +252,15 @@ Input
 2. ✅ Peak/RMS detection blend
 3. ✅ Wider parameter ranges
 4. ✅ Visual gain reduction metering
-5. ✅ Look-ahead with host latency reporting
-6. ✅ Noise gate (pre-input-gain, prevents noise floor amplification)
+5. ✅ Noise gate (pre-input-gain, prevents noise floor amplification)
 
 ---
 
 ## Sprint Status
 
 ### Sprint 1 ✅ COMPLETE
-1. ✅ Auto Makeup Gain
-2. ✅ Gain Reduction Meter
-3. ✅ DSP Stability (no pops)
-4. ✅ Look-Ahead with ring buffer + host latency
+1. ✅ Gain Reduction Meter
+2. ✅ DSP Stability (no pops)
 
 ### Sprint 2 (In Progress)
 1. ✅ Sidechain HPF — fixed 80 Hz, always on
@@ -304,7 +287,7 @@ Input
 - Host latency reported via `latency` override in same file
 - Ring buffer always allocated at max capacity (never mid-stream realloc)
 - All filter coefficients computed in `initialize()` — correct across 44.1/48/96 kHz
-- **15 parameters** (addresses 0–14); gainReductionMeter is read-only
+- **14 parameters** (addresses 0–15, address 10 reserved); gainReductionMeter and outputLevelMeter are read-only
 
 ---
 
@@ -320,8 +303,6 @@ Row 1: [GATE 55px]  [INPUT 55px]  [THRESHOLD 55px]  [RATIO 55px]  (spacing 10px)
 Row 2: [ATTACK 65px]    [RELEASE 65px]
 Row 3: [MIX 65px]       [KNEE 65px]       [DETECT 65px]
 Row 4: [MAKEUP 65px]    [SHEEN 65px]
-       └[AUTO toggle]
-Row 5: [LOOK-AHEAD segmented: Off / 2ms / 5ms / 10ms]
 [BYPASS button]
 [TaylorAudio logo]
 ```
@@ -373,7 +354,7 @@ Row 5: [LOOK-AHEAD segmented: Off / 2ms / 5ms / 10ms]
 
 ### Version 1.0 (Current + Sprint 2)
 - Solid vocal compressor with full JJP-style feature set
-- Input drive, VCA punch, 4-stage Sheen, auto makeup, look-ahead, metering
+- Input drive, VCA punch, 4-stage Sheen, metering
 - Preset system with good factory presets
 
 ### Version 1.5 (+ Sprint 3)

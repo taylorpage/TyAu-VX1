@@ -9,16 +9,6 @@ The VX1 is a professional vocal compressor plugin designed to deliver aggressive
 ## Signal Flow
 
 ```
-Input Signal × Input Gain
-    ├─→ [Detection path] → 80 Hz HPF → Peak/RMS blend → Envelope Follower → GR Calc → GR Overshoot
-    |                                                                                        ↓
-    └─→ [Audio path] Ring Buffer (Look-Ahead delay) ───────────────────────→ Apply GR → Saturation → Makeup → Mix
-                                                                                                                ↓
-                                                                                                         Output Signal
-```
-
-When Look-Ahead is Off, the ring buffer is bypassed and signal flow is direct:
-```
 Input × InputGain → Detection (HPF → envelope) → GR + Overshoot → Saturation → Makeup → Mix → Output
 ```
 
@@ -26,8 +16,6 @@ Input × InputGain → Detection (HPF → envelope) → GR + Overshoot → Satur
 - **Input Gain**: Drives signal harder into the compressor for "slammed" compression character
 - **Sidechain HPF**: Fixed 80 Hz high-pass filter on detection path (always on) — prevents kick/bass from pumping
 - **GR Overshoot**: VCA-style transient punch — brief extra grab on fast transients
-- **Auto Makeup Gain**: Automatically compensates for compression (80% of average GR)
-- **Look-Ahead**: Compressor detects transients before they arrive; audio delayed to match
 - **Visual Metering**: Gain reduction meter with smooth ballistics, 60 Hz updates
 
 ---
@@ -44,7 +32,6 @@ Input × InputGain → Detection (HPF → envelope) → GR + Overshoot → Satur
   - Increasing Input drives a hotter signal into the compressor, forcing more gain reduction at any threshold/ratio setting
   - This is how hardware engineers "slam" a compressor — push a hot signal into a tight threshold
 - **The key insight**: Input Gain affects BOTH the detection path and the audio path, so the compressor genuinely reacts to the louder signal (not a fake level boost after compression)
-- **Works with Auto Makeup**: Auto Makeup tracks the resulting gain reduction and compensates automatically, so you can slam Input without manually chasing levels
 - **Sweet spots**:
   - **0 dB**: Standard, controlled compression
   - **+6 to +12 dB**: Noticeably more "grab" at the same threshold/ratio settings
@@ -161,22 +148,6 @@ Input × InputGain → Detection (HPF → envelope) → GR + Overshoot → Satur
   - Typically add 3-10 dB for moderate compression
   - Higher compression needs more makeup gain
 
-#### **Auto Makeup** (Toggle Switch)
-- **What it does**: Automatically adds makeup gain based on compression amount
-- **Default**: Off
-- **How it works**:
-  - Tracks average gain reduction over time (100ms smoothing)
-  - Adds 80% of average GR as makeup (intentional under-compensation)
-  - Works multiplicatively with manual makeup gain
-- **Why 80% instead of 100%**:
-  - Preserves some dynamic contrast (JJP-style punch)
-  - Prevents over-leveling that can sound lifeless
-  - Leaves room for manual fine-tuning
-- **When to use it**:
-  - **ON**: Quick workflow, parallel compression, "set and forget"
-  - **OFF**: When you want precise manual control or extreme settings
-- **JJP Secret**: Auto makeup at 80% + parallel mix at 50-70% = signature thick-but-punchy sound
-
 #### **Mix** (0% to 100%)
 - **What it does**: Parallel compression - blends dry and processed signals
 - **Default**: 100% (fully wet)
@@ -189,26 +160,6 @@ Input × InputGain → Detection (HPF → envelope) → GR + Overshoot → Satur
   - **Heavy parallel (50-70%)**: JJP-style punch
   - **Subtle parallel (20-40%)**: Adds thickness without obvious compression
   - **Dry (0%)**: Bypass (use Bypass button instead)
-
----
-
-### Timing
-
-#### **Look-Ahead** (Off / 2ms / 5ms / 10ms)
-- **What it does**: Delays the audio path so the compressor can react to transients before they arrive
-- **Default**: Off
-- **How it works**:
-  - Detection runs on the current (live) input signal
-  - Audio is delayed by the selected amount via a ring buffer
-  - The DAW receives a reported latency equal to the look-ahead time and compensates automatically
-- **Sweet spots**:
-  - **Off**: Zero added latency, standard compression
-  - **2ms**: Catches fast vocal consonants without obvious latency
-  - **5ms**: Good all-around transient control — recommended starting point
-  - **10ms**: Maximum transient suppression, suited to peak-heavy sources
-- **When to use it**:
-  - **ON (2–5ms)**: JJP-style aggressive control where fast attack alone isn't enough
-  - **OFF**: Live monitoring or when DAW latency compensation is unavailable
 
 ---
 
@@ -247,13 +198,12 @@ Knee:         4 dB
 Detection:    40% (peak-heavy)
 Sheen:        50%
 Makeup Gain:  +5 dB
-Auto Makeup:  ON
 Mix:          60%
 ```
 
-**Why it works**: Fast attack catches transients, heavy ratio controls dynamics, peak detection adds aggression, Sheen adds presence harmonics, parallel mix retains punch. Auto makeup compensates for ~8-12 dB of gain reduction.
+**Why it works**: Fast attack catches transients, heavy ratio controls dynamics, peak detection adds aggression, Sheen adds presence harmonics, parallel mix retains punch.
 
-**JJP Secret**: The combination of 50% Sheen + 60% parallel mix creates the signature "thick sheen" without sounding over-processed. Auto makeup keeps levels consistent when adjusting threshold.
+**JJP Secret**: The combination of 50% Sheen + 60% parallel mix creates the signature "thick sheen" without sounding over-processed.
 
 ---
 
@@ -288,13 +238,12 @@ Knee:         3 dB
 Detection:    50%
 Sheen:        35%
 Makeup Gain:  0 dB
-Auto Makeup:  ON
 Mix:          40%
 ```
 
-**Why it works**: Heavy compression on wet signal blended subtly with dry creates thickness without losing transients. Auto makeup handles level compensation so you can focus on the mix blend.
+**Why it works**: Heavy compression on wet signal blended subtly with dry creates thickness without losing transients.
 
-**Pro Tip**: With auto makeup ON, you can freely adjust threshold and ratio without worrying about level changes. The 40% mix keeps the natural dynamics while adding controlled density.
+**Pro Tip**: The 40% mix keeps the natural dynamics while adding controlled density.
 
 ---
 
@@ -342,13 +291,12 @@ Mix:          100%
 
 1. **Set Input Gain**: Start at 0 dB; increase to +6–12 dB to "slam" the compressor
 2. **Set Threshold & Ratio**: Get the basic compression working (watch the meter)
-3. **Enable Auto Makeup**: Turn on for easier workflow (recommended)
-4. **Adjust Attack/Release**: Shape the compression response
-5. **Tune Detection**: Find the right balance of punch vs. smoothness
-6. **Add Sheen**: Introduce harmonic enhancement
-7. **Set Mix**: Decide between serial or parallel compression
-8. **Fine-tune Makeup**: Adjust manual makeup if needed (auto handles most of it)
-9. **Check the Meter**: Aim for 8-15 dB GR for JJP-style compression
+3. **Adjust Attack/Release**: Shape the compression response
+4. **Tune Detection**: Find the right balance of punch vs. smoothness
+5. **Add Sheen**: Introduce harmonic enhancement
+6. **Set Mix**: Decide between serial or parallel compression
+7. **Set Makeup Gain**: Adjust to compensate for gain reduction
+8. **Check the Meter**: Aim for 8-15 dB GR for JJP-style compression
 
 ### Common Mistakes to Avoid
 
@@ -409,25 +357,22 @@ The VX1 achieves the classic JJP vocal sound through a specific combination of f
 1. **Input Gain +6–12 dB**: Drive the signal into the compressor for more grab
 2. **Heavy Compression**: 8-15 dB of gain reduction (check the meter)
 3. **Parallel Mix**: 50-70% wet (retains transients while adding density)
-4. **Auto Makeup at 80%**: Maintains punch by slightly under-compensating
-5. **Sheen at 40-60%**: Adds presence-weighted harmonic "shine"
-6. **Peak Detection (20-50%)**: Adds aggression and attack
+4. **Sheen at 40-60%**: Adds presence-weighted harmonic "shine"
+5. **Peak Detection (20-50%)**: Adds aggression and attack
 
 ### Why It Works:
 - **Input Gain**: Drives a hotter signal into the compressor → more GR at the same settings → the "slammed" grab character.
-- **The 80% Auto Makeup**: Full compensation (100%) would make everything feel flat. The 20% "missing" level creates forward motion and energy.
-- **Parallel + Under-compensation**: Together, they create the "thick but punchy" paradox — density without losing dynamics.
+- **Parallel compression**: Creates the "thick but punchy" paradox — density without losing dynamics.
 - **Sheen + Parallel**: 4-stage presence harmonics on the wet signal only = shimmer and character without distorting the full mix.
 - **GR Overshoot**: Automatic VCA-style transient grab — the extra "punch" that makes fast transients feel physical.
 
 ### Quick JJP Setup:
 1. Set Input Gain to +6–9 dB for extra slam
 2. Set threshold for 10-12 dB gain reduction
-3. Turn Auto Makeup ON
-4. Set Mix to 60%
-5. Set Sheen to 50%
-6. Adjust Detection to taste (40% is a good start)
-7. Fine-tune with manual makeup if needed
+3. Set Mix to 60%
+4. Set Sheen to 50%
+5. Adjust Detection to taste (40% is a good start)
+6. Set Makeup Gain to match your output level
 
 ---
 
@@ -450,7 +395,7 @@ The VX1 achieves the classic JJP vocal sound through a specific combination of f
 ### Input Gain + Threshold
 - Increasing Input Gain is equivalent to moving threshold down — both force more GR
 - Use Input Gain when you want more slam without changing the threshold/ratio relationship
-- At high Input Gain, watch the meter; engage Auto Makeup to handle level compensation automatically
+- At high Input Gain, watch the meter and adjust Makeup Gain to compensate for level changes
 
 ### Knee + Ratio
 - Small knee + high ratio = obvious, grabby compression

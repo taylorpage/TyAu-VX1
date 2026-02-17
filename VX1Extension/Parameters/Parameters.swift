@@ -91,14 +91,6 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             defaultValue: 25.0
         )
         ParameterSpec(
-            address: .autoMakeup,
-            identifier: "autoMakeup",
-            name: "Auto Makeup",
-            units: .boolean,
-            valueRange: 0.0...1.0,
-            defaultValue: 0.0
-        )
-        ParameterSpec(
             address: .gainReductionMeter,
             identifier: "gainReductionMeter",
             name: "Gain Reduction",
@@ -106,15 +98,6 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             valueRange: 0.0...60.0,
             defaultValue: 0.0,
             flags: [.flag_IsReadable, .flag_IsWritable]  // Writable for internal updates, but controlled by DSP
-        )
-        ParameterSpec(
-            address: .lookAhead,
-            identifier: "lookAhead",
-            name: "Look-Ahead",
-            units: .indexed,
-            valueRange: 0.0...3.0,
-            defaultValue: 0.0,
-            valueStrings: ["Off", "2ms", "5ms", "10ms"]
         )
         ParameterSpec(
             address: .inputGain,
