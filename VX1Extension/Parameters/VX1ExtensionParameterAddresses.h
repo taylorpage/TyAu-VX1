@@ -23,5 +23,6 @@ typedef NS_ENUM(AUParameterAddress, VX1ExtensionParameterAddress) {
     autoMakeup = 10,
     gainReductionMeter = 11,  // Read-only meter value
     lookAhead = 12,           // Look-ahead time: 0=Off, 1=2ms, 2=5ms, 3=10ms
-    inputGain = 13            // Pre-compression input gain: 0 to +24 dB
+    inputGain = 13,           // Pre-compression input gain: 0 to +24 dB
+    gateThreshold = 14        // Noise gate threshold: -80 to -20 dB (-60 dB default = off)
 };

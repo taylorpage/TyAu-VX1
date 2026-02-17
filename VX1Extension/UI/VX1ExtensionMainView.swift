@@ -47,24 +47,31 @@ struct VX1ExtensionMainView: View {
 
                 // Main controls grid
                 VStack(spacing: 8) {
-                    // Top row: Input, Threshold, Ratio
-                    HStack(spacing: 12) {
+                    // Top row: Gate, Input, Threshold, Ratio
+                    HStack(spacing: 10) {
                         VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.inputGain, size: 60)
+                            ParameterKnob(param: parameterTree.global.gateThreshold, size: 55)
+                            Text("GATE")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.2))
+                        }
+
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.inputGain, size: 55)
                             Text("INPUT")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(Color(red: 0.2, green: 0.8, blue: 1.0))
                         }
 
                         VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.threshold, size: 60)
+                            ParameterKnob(param: parameterTree.global.threshold, size: 55)
                             Text("THRESHOLD")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
                         }
 
                         VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.ratio, size: 60)
+                            ParameterKnob(param: parameterTree.global.ratio, size: 55)
                             Text("RATIO")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))

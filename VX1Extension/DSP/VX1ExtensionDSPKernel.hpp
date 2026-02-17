@@ -36,6 +36,11 @@ public:
         mOvershootReleaseCoeff = std::exp(-1.0f / (0.002f * (float)mSampleRate));
         mOvershootHoldSamples  = static_cast<int>(0.0005f * mSampleRate);
 
+        // Noise gate timing: 0.5ms attack, 100ms release, 50ms hold
+        mGateAttackCoeff  = std::exp(-1.0f / (0.0005f * (float)mSampleRate));
+        mGateReleaseCoeff = std::exp(-1.0f / (0.100f  * (float)mSampleRate));
+        mGateHoldSamples  = static_cast<int>(0.050f   * mSampleRate);
+
         // Allocate look-ahead ring buffer: max 10ms at current sample rate, per channel
         // Always allocate max capacity so we never reallocate mid-stream
         int maxLookAheadSamples = static_cast<int>(std::ceil(0.010 * mSampleRate));
@@ -76,6 +81,12 @@ public:
         mPrevGainReductionDb = 0.0f;
         mOvershootDb = 0.0f;
         mOvershootHoldCounter = 0;
+
+        // Reset gate state
+        mGateEnvelope = 0.0f;
+        mGateGain = 1.0f;
+        mGateHoldCounter = 0;
+        mGateOpen = true;
     }
 
     // MARK: - Bypass
@@ -135,6 +146,9 @@ public:
                 mInputGainDb = value;
                 mInputGainLinear = std::pow(10.0f, mInputGainDb / 20.0f);
                 break;
+            case VX1ExtensionParameterAddress::gateThreshold:
+                mGateThresholdDb = value;
+                break;
         }
     }
 
@@ -168,6 +182,8 @@ public:
                 return (AUValue)mLookAheadIndex;
             case VX1ExtensionParameterAddress::inputGain:
                 return (AUValue)mInputGainDb;
+            case VX1ExtensionParameterAddress::gateThreshold:
+                return (AUValue)mGateThresholdDb;
             default:
                 return 0.f;
         }
@@ -380,13 +396,50 @@ public:
             // Process each frame
             for (UInt32 frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
 
+                // --- Noise Gate: pre-input-gain, runs on raw input level ---
+                // Envelope follower on the peak of the raw (pre-gain) mono sum.
+                // When signal drops below threshold: hold for 50ms, then close over 100ms.
+                // Gate gain (0=closed, 1=open) is applied to both sidechain and audio paths.
+                {
+                    float rawMono = 0.0f;
+                    for (UInt32 ch = 0; ch < inputBuffers.size(); ++ch) {
+                        rawMono += std::abs(inputBuffers[ch][frameIndex]);
+                    }
+                    rawMono /= (float)inputBuffers.size();
+
+                    // Peak envelope follower: fast attack, slow release
+                    if (rawMono > mGateEnvelope) {
+                        mGateEnvelope = mGateAttackCoeff * mGateEnvelope + (1.0f - mGateAttackCoeff) * rawMono;
+                    } else {
+                        mGateEnvelope = mGateReleaseCoeff * mGateEnvelope + (1.0f - mGateReleaseCoeff) * rawMono;
+                    }
+
+                    float gateThresholdLinear = std::pow(10.0f, mGateThresholdDb / 20.0f);
+                    bool signalAboveThreshold = (mGateEnvelope >= gateThresholdLinear);
+
+                    if (signalAboveThreshold) {
+                        // Signal present: open gate, reset hold counter
+                        mGateOpen = true;
+                        mGateHoldCounter = mGateHoldSamples;
+                        mGateGain = 1.0f;  // snap open instantly
+                    } else if (mGateHoldCounter > 0) {
+                        // Signal gone but still in hold period: stay open
+                        mGateHoldCounter--;
+                        mGateGain = 1.0f;
+                    } else {
+                        // Hold expired: close gate with smoothed release
+                        mGateOpen = false;
+                        mGateGain *= mGateReleaseCoeff;
+                    }
+                }
+
                 // --- Detection: always runs on the current (undelayed) input ---
                 // Input gain applied here so detector sees the hotter driven signal,
                 // forcing more gain reduction at any threshold/ratio setting.
                 // Sidechain signal: mono sum (with input gain) → fixed 80 Hz HPF
                 float monoSC = 0.0f;
                 for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
-                    monoSC += inputBuffers[channel][frameIndex] * mInputGainLinear;
+                    monoSC += inputBuffers[channel][frameIndex] * mGateGain * mInputGainLinear;
                 }
                 monoSC /= (float)inputBuffers.size();
                 float filteredSC = applyHpf(monoSC);
@@ -464,8 +517,8 @@ public:
                 float mixDry = 1.0f - mixWet;
 
                 for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
-                    // Apply input gain to audio path (matches what detector saw)
-                    float currentInput = inputBuffers[channel][frameIndex] * mInputGainLinear;
+                    // Apply gate then input gain to audio path (matches what detector saw)
+                    float currentInput = inputBuffers[channel][frameIndex] * mGateGain * mInputGainLinear;
 
                     // --- Look-ahead: audio path uses the delayed sample from the ring buffer ---
                     float audioInput;
@@ -601,4 +654,16 @@ public:
     float mOvershootReleaseCoeff = 0.0f; // exp(-1 / (2ms * sr)) — computed in initialize()
     int   mOvershootHoldSamples = 0;     // 0.5ms * sr — computed in initialize()
     int   mOvershootHoldCounter = 0;     // Counts down from mOvershootHoldSamples
+
+    // Noise gate — pre-input-gain, before entire compressor chain
+    // Threshold: -80 to -20 dB. At -80 dB (default) the gate is effectively always open.
+    // Attack: 0.5ms (fast open), Hold: 50ms (prevents chatter), Release: 100ms (smooth close).
+    float mGateThresholdDb = -80.0f;     // User-set threshold (-80 = off)
+    float mGateEnvelope = 0.0f;          // Peak envelope follower on raw input (pre-gain)
+    float mGateGain = 1.0f;              // Current gate gain scalar (0=closed, 1=open), smoothed
+    float mGateAttackCoeff = 0.0f;       // exp(-1 / (0.5ms * sr))
+    float mGateReleaseCoeff = 0.0f;      // exp(-1 / (100ms * sr))
+    int   mGateHoldSamples = 0;          // 50ms * sr
+    int   mGateHoldCounter = 0;          // Counts down when signal drops below threshold
+    bool  mGateOpen = true;              // Current gate state (open/closed)
 };

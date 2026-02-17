@@ -39,7 +39,7 @@
 
 ---
 
-## Parameter List (14 parameters, addresses 0–13)
+## Parameter List (15 parameters, addresses 0–14)
 
 | Address | Identifier | Name | Type | Range | Default |
 |---------|-----------|------|------|-------|---------|
@@ -57,6 +57,7 @@
 | 11 | gainReductionMeter | Gain Reduction | dB | 0…60 | 0 (read-only) |
 | 12 | lookAhead | Look-Ahead | indexed | 0…3 | 0 (Off/2ms/5ms/10ms) |
 | 13 | inputGain | Input | dB | 0…24 | 0 |
+| 14 | gateThreshold | Gate | dB | -80…-20 | -80 (off) |
 
 ---
 
@@ -144,13 +145,35 @@ See `Docs/VX1_Saturation_Algorithm.md` for full algorithm documentation.
 
 ---
 
-#### 2.4 Input/Output Metering
+#### 2.4 Noise Gate ✅ NEW
+**Status**: IMPLEMENTED (address 14)
+
+**What it does**: Pre-input-gain noise gate. Monitors the raw input (before any gain staging) and mutes the signal when it drops below threshold, preventing Input Gain and Sheen from amplifying/saturating background noise between vocal phrases.
+
+**Parameters**:
+- Threshold: -80 to -20 dB, default -80 dB (= gate off, no effect)
+
+**Fixed timing (internal)**:
+- Attack: 0.5ms — gate snaps open the instant signal is detected
+- Hold: 50ms — gate stays open after signal drops (prevents chatter on breath pauses)
+- Release: 100ms — smooth exponential close after hold expires
+
+**Implementation**:
+- Peak envelope follower on mono sum of raw (pre-gain) input
+- `mGateGain` scalar (0–1) applied to both sidechain and audio paths before `mInputGainLinear`
+- All timing coefficients computed sample-rate adaptively in `initialize()`
+
+**UI**: GATE knob, Row 1 leftmost, 55px, orange label
+
+---
+
+#### 2.5 Input/Output Metering
 **Status**: Not implemented
 - Add input level meter and output level meter
 - Show peak and RMS
 - Benefits: prevent clipping, monitor levels, professional workflow
 
-#### 2.5 Presets System
+#### 2.6 Presets System
 **Status**: Not implemented
 - Factory presets (JJP Style, Transparent, Thick, etc.)
 - User preset save/load
@@ -199,15 +222,19 @@ See `Docs/VX1_Saturation_Algorithm.md` for full algorithm documentation.
 ```
 Input
   │
+  ├─[Noise Gate — pre-input-gain]
+  │   raw input → peak envelope follower (0.5ms attack, 50ms hold, 100ms release)
+  │   → compare to gateThreshold → mGateGain scalar (0=closed, 1=open)
+  │
   ├─[Sidechain — detection only]
-  │   input × inputGainLinear → mono sum
+  │   input × mGateGain × inputGainLinear → mono sum
   │   → fixed 80 Hz 2-pole Butterworth HPF
   │   → abs(filtered) → envelope follower (attack/release)
   │   → GR calculation (threshold, ratio, soft knee)
   │   → GR Overshoot check (VCA punch)
   │
   ├─[Audio path]
-  │   input × inputGainLinear → currentInput
+  │   input × mGateGain × inputGainLinear → currentInput
   │   → ring buffer delay (look-ahead: 0/2/5/10ms)
   │   → gainReductionTotal applied (GR + overshoot)
   │   → Sheen saturation (4-stage algorithm)
@@ -240,6 +267,7 @@ Input
 3. ✅ Wider parameter ranges
 4. ✅ Visual gain reduction metering
 5. ✅ Look-ahead with host latency reporting
+6. ✅ Noise gate (pre-input-gain, prevents noise floor amplification)
 
 ---
 
@@ -256,8 +284,9 @@ Input
 2. ✅ Sheen Saturation — 4-stage JJP presence algorithm
 3. ✅ Input Gain — pre-compression drive (address 13)
 4. ✅ GR Overshoot — VCA punch (internal)
-5. ⬜ Input/Output Metering
-6. ⬜ Presets System
+5. ✅ Noise Gate — pre-input-gain, threshold knob (address 14)
+6. ⬜ Input/Output Metering
+7. ⬜ Presets System
 
 ### Sprint 3 (Planned)
 1. De-esser
@@ -275,7 +304,7 @@ Input
 - Host latency reported via `latency` override in same file
 - Ring buffer always allocated at max capacity (never mid-stream realloc)
 - All filter coefficients computed in `initialize()` — correct across 44.1/48/96 kHz
-- **14 parameters** (addresses 0–13); gainReductionMeter is read-only
+- **15 parameters** (addresses 0–14); gainReductionMeter is read-only
 
 ---
 
@@ -287,7 +316,7 @@ Window: 350×580px, dark gradient background.
 [Title: VX1 COMPRESSOR]
 [LED indicator]
 [Gain Reduction Meter]
-Row 1: [INPUT 60px]     [THRESHOLD 60px]  [RATIO 60px]   (spacing 12px)
+Row 1: [GATE 55px]  [INPUT 55px]  [THRESHOLD 55px]  [RATIO 55px]  (spacing 10px)
 Row 2: [ATTACK 65px]    [RELEASE 65px]
 Row 3: [MIX 65px]       [KNEE 65px]       [DETECT 65px]
 Row 4: [MAKEUP 65px]    [SHEEN 65px]

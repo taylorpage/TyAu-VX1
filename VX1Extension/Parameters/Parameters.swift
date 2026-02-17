@@ -124,6 +124,14 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             valueRange: 0.0...24.0,
             defaultValue: 0.0
         )
+        ParameterSpec(
+            address: .gateThreshold,
+            identifier: "gateThreshold",
+            name: "Gate",
+            units: .decibels,
+            valueRange: -80.0...(-20.0),
+            defaultValue: -80.0
+        )
     }
 }
 

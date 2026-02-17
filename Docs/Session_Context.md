@@ -16,7 +16,7 @@ Built with: Swift (AU host + UI), C++ (DSP kernel), SwiftUI.
 
 ---
 
-## Current Parameter List (14 parameters, addresses 0–13)
+## Current Parameter List (15 parameters, addresses 0–14)
 
 | Address | Identifier | Name | Type | Range | Default |
 |---------|-----------|------|------|-------|---------|
@@ -34,8 +34,9 @@ Built with: Swift (AU host + UI), C++ (DSP kernel), SwiftUI.
 | 11 | gainReductionMeter | Gain Reduction | dB | 0…60 | 0 (read-only) |
 | 12 | lookAhead | Look-Ahead | indexed | 0…3 | 0 (Off/2ms/5ms/10ms) |
 | 13 | inputGain | Input | dB | 0…24 | 0 |
+| 14 | gateThreshold | Gate | dB | -80…-20 | -80 (off) |
 
-> Note: `drive` was renamed to `sheen` in Sprint 2. `inputGain` (address 13) is fully implemented.
+> Note: `drive` was renamed to `sheen` in Sprint 2. `inputGain` (address 13) is fully implemented. `gateThreshold` (address 14) default of -80 dB = gate disabled.
 
 ---
 
@@ -68,15 +69,20 @@ Docs/
 ```
 Input
   │
+  ├─[Noise Gate — pre-input-gain]
+  │   raw input → peak envelope follower (0.5ms attack, 50ms hold, 100ms release)
+  │   → compare to gateThreshold → mGateGain scalar (0=closed, 1=open)
+  │   → applied to both sidechain and audio paths
+  │
   ├─[Sidechain path — detection only]
-  │   input × mInputGainLinear → mono sum
+  │   input × mGateGain × mInputGainLinear → mono sum
   │   → fixed 80 Hz 2-pole Butterworth HPF
   │   → abs(filtered) → envelope follower (attack/release)
   │   → GR calculation (threshold, ratio, soft knee)
   │   → GR Overshoot check (VCA punch: +3 dB if grJump > 3 dB, hold 0.5ms, release 2ms)
   │
   ├─[Audio path]
-  │   input × mInputGainLinear → currentInput
+  │   input × mGateGain × mInputGainLinear → currentInput
   │   → ring buffer delay (look-ahead: 0/2/5/10ms)
   │   → gainReductionTotal applied (GR + mOvershootDb)
   │   → Sheen saturation (4-stage algorithm — see below)
@@ -97,6 +103,17 @@ Input
 - Soft knee: quadratic interpolation (0–12 dB)
 - Attack: 0–200ms, Release: 5–5000ms
 - Peak/RMS detection blend (Detection parameter)
+
+### Noise Gate (address 14) ✅ IMPLEMENTED
+- Pre-input-gain gate: runs on raw input before any gain staging or processing
+- Threshold: -80 to -20 dB (-80 dB default = effectively off)
+- Fixed timing: 0.5ms attack, 50ms hold, 100ms release
+- Peak envelope follower on mono sum of raw input
+- `mGateGain` scalar (0–1) applied to both sidechain detection and audio path
+- Prevents Input Gain + Sheen from amplifying/saturating background noise between phrases
+- UI: orange "GATE" knob in Row 1 (leftmost), 55px
+- State: `mGateEnvelope`, `mGateGain`, `mGateAttackCoeff`, `mGateReleaseCoeff`, `mGateHoldSamples`, `mGateHoldCounter`, `mGateOpen`
+- Coefficients computed in `initialize()`: sample-rate adaptive
 
 ### Input Gain (address 13) ✅ IMPLEMENTED
 - Pre-compression signal gain: 0 to +24 dB, default 0
@@ -159,7 +176,7 @@ Window: 350×580px, dark gradient background.
 [Title: VX1 COMPRESSOR]
 [LED indicator]
 [Gain Reduction Meter]
-Row 1: [INPUT 60px]     [THRESHOLD 60px]  [RATIO 60px]   (spacing 12px, INPUT label is cyan)
+Row 1: [GATE 55px]  [INPUT 55px]  [THRESHOLD 55px]  [RATIO 55px]  (spacing 10px, GATE label is orange, INPUT label is cyan)
 Row 2: [ATTACK 65px]    [RELEASE 65px]
 Row 3: [MIX 65px]       [KNEE 65px]       [DETECT 65px]
 Row 4: [MAKEUP 65px]    [SHEEN 65px]
@@ -184,8 +201,9 @@ Row 5: [LOOK-AHEAD segmented: Off / 2ms / 5ms / 10ms]
 2. ✅ Sheen Saturation — 4-stage JJP presence algorithm (renamed from Drive)
 3. ✅ Input Gain — pre-compression drive, 0–24 dB (address 13)
 4. ✅ GR Overshoot — VCA punch (internal, no user parameter)
-5. ⬜ Input/Output Metering
-6. ⬜ Presets System
+5. ✅ Noise Gate — pre-input-gain, threshold knob (address 14)
+6. ⬜ Input/Output Metering
+7. ⬜ Presets System
 
 ### Sprint 3 (Planned)
 1. De-esser
@@ -203,7 +221,7 @@ Row 5: [LOOK-AHEAD segmented: Off / 2ms / 5ms / 10ms]
 - Host latency reported via `latency` override in same file
 - Ring buffer always allocated at max capacity (never mid-stream realloc)
 - All filter coefficients computed in `initialize()` — correct across 44.1/48/96 kHz
-- **14 parameters** (addresses 0–13); gainReductionMeter (address 11) is read-only
+- **15 parameters** (addresses 0–14); gainReductionMeter (address 11) is read-only
 
 ---
 
