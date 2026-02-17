@@ -103,10 +103,14 @@ public class VX1ExtensionAudioUnit: AUAudioUnit, @unchecked Sendable
     // Deallocate resources allocated in allocateRenderResourcesAndReturnError:
     // Subclassers should call the superclass implementation.
     public override func deallocateRenderResources() {
-        // Reset meter to 0 before stopping timer
-        if let parameterTree = parameterTree,
-           let grMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.gainReductionMeter.rawValue) {
-            grMeter.setValue(0.0, originator: nil)
+        // Reset meters before stopping timer
+        if let parameterTree = parameterTree {
+            if let grMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.gainReductionMeter.rawValue) {
+                grMeter.setValue(0.0, originator: nil)
+            }
+            if let vuMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.outputLevelMeter.rawValue) {
+                vuMeter.setValue(-60.0, originator: nil)
+            }
         }
 
         // Stop meter update timer
@@ -174,6 +178,12 @@ public class VX1ExtensionAudioUnit: AUAudioUnit, @unchecked Sendable
         if let grMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.gainReductionMeter.rawValue) {
             let currentGR = kernel.getParameter(VX1ExtensionParameterAddress.gainReductionMeter.rawValue)
             grMeter.setValue(currentGR, originator: nil)
+        }
+
+        // Update output level meter (drives the VU meter needle)
+        if let vuMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.outputLevelMeter.rawValue) {
+            let currentLevel = kernel.getParameter(VX1ExtensionParameterAddress.outputLevelMeter.rawValue)
+            vuMeter.setValue(currentLevel, originator: nil)
         }
     }
 }

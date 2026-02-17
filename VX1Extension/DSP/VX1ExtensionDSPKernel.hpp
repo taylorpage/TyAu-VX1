@@ -67,6 +67,7 @@ public:
         mEnvelopeLevel = 0.0f;
         mAvgGainReductionDb = 0.0f;
         mCurrentGainReductionDb = 0.0f;
+        mCurrentOutputLevelDb = -60.0f;
         mRingBuffer.clear();
         mRingWritePos = 0;
 
@@ -178,6 +179,8 @@ public:
                 return (AUValue)(mAutoMakeupEnabled ? 1.0f : 0.0f);
             case VX1ExtensionParameterAddress::gainReductionMeter:
                 return (AUValue)mCurrentGainReductionDb;
+            case VX1ExtensionParameterAddress::outputLevelMeter:
+                return (AUValue)mCurrentOutputLevelDb;
             case VX1ExtensionParameterAddress::lookAhead:
                 return (AUValue)mLookAheadIndex;
             case VX1ExtensionParameterAddress::inputGain:
@@ -385,9 +388,11 @@ public:
                 std::copy_n(inputBuffers[channel], frameCount, outputBuffers[channel]);
             }
             mCurrentGainReductionDb = 0.0f;
+            mCurrentOutputLevelDb = -60.0f;
         } else {
-            // Track peak gain reduction in this buffer
+            // Track peak gain reduction and output level in this buffer
             float peakGainReductionDb = 0.0f;
+            float peakOutputLevel = 0.0f;
 
             const int lookAheadSamples = mLookAheadSamples;
             const bool usingLookAhead = (lookAheadSamples > 0) && !mRingBuffer.empty();
@@ -545,6 +550,9 @@ public:
                     // Dry signal is also the delayed audio so timing stays aligned
                     float output = (audioInput * mixDry) + (saturated * mixWet);
                     outputBuffers[channel][frameIndex] = output;
+
+                    // Track peak output level across channels for VU metering
+                    peakOutputLevel = std::max(peakOutputLevel, std::abs(output));
                 }
 
                 // Advance ring buffer write position once per frame (after all channels)
@@ -574,6 +582,19 @@ public:
                     float meterReleaseCoeff = 0.95f;
                     mCurrentGainReductionDb = meterReleaseCoeff * mCurrentGainReductionDb + (1.0f - meterReleaseCoeff) * peakGainReductionDb;
                 }
+            }
+
+            // Update output level meter: fast attack (10ms), slower release (150ms)
+            // Attack is snappy so transients register immediately; release gives smooth fallback.
+            float peakOutputDb = (peakOutputLevel > 1e-6f)
+                ? std::max(-60.0f, 20.0f * std::log10(peakOutputLevel))
+                : -60.0f;
+            if (peakOutputDb > mCurrentOutputLevelDb) {
+                float attackCoeff = std::exp(-1.0f / (0.010f * (float)mSampleRate / (float)frameCount));
+                mCurrentOutputLevelDb = attackCoeff * mCurrentOutputLevelDb + (1.0f - attackCoeff) * peakOutputDb;
+            } else {
+                float releaseCoeff = std::exp(-1.0f / (0.150f * (float)mSampleRate / (float)frameCount));
+                mCurrentOutputLevelDb = releaseCoeff * mCurrentOutputLevelDb + (1.0f - releaseCoeff) * peakOutputDb;
             }
         }
     }
@@ -623,6 +644,7 @@ public:
     float mEnvelopeLevel = 0.0f;           // Envelope follower state
     float mAvgGainReductionDb = 0.0f;      // Smoothed average gain reduction for auto makeup
     float mCurrentGainReductionDb = 0.0f;  // Current gain reduction for metering
+    float mCurrentOutputLevelDb = -60.0f; // Current output level for VU metering (dB)
 
     // Look-ahead
     int mLookAheadIndex = 0;               // 0=Off, 1=2ms, 2=5ms, 3=10ms

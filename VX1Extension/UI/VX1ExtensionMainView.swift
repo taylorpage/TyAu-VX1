@@ -36,14 +36,9 @@ struct VX1ExtensionMainView: View {
                     .frame(width: 8, height: 8)
                     .shadow(color: bypassParam.boolValue ? .clear : Color(red: 0.2, green: 0.8, blue: 1.0).opacity(0.8), radius: 4)
 
-                // Gain Reduction Meter
-                VStack(spacing: 2) {
-                    Text("GAIN REDUCTION")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.8))
-                    GainReductionMeter(param: gainReductionParam)
-                }
-                .padding(.vertical, 8)
+                // VU Meter (output level)
+                VUMeter(param: outputLevelParam, width: 300, height: 160)
+                    .padding(.vertical, 4)
 
                 // Main controls grid
                 VStack(spacing: 8) {
@@ -191,7 +186,7 @@ struct VX1ExtensionMainView: View {
             }
             .padding(12)
         }
-        .frame(width: 350, height: 580)
+        .frame(width: 350, height: 680)
     }
 
     // MARK: - Computed Properties
@@ -204,8 +199,8 @@ struct VX1ExtensionMainView: View {
         parameterTree.global.autoMakeup
     }
 
-    var gainReductionParam: ObservableAUParameter {
-        parameterTree.global.gainReductionMeter
+    var outputLevelParam: ObservableAUParameter {
+        parameterTree.global.outputLevelMeter
     }
 
     var lookAheadParam: ObservableAUParameter {

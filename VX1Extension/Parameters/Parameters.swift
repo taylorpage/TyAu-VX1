@@ -132,6 +132,15 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             valueRange: -80.0...(-20.0),
             defaultValue: -80.0
         )
+        ParameterSpec(
+            address: .outputLevelMeter,
+            identifier: "outputLevelMeter",
+            name: "Output Level",
+            units: .decibels,
+            valueRange: -60.0...0.0,
+            defaultValue: -60.0,
+            flags: [.flag_IsReadable, .flag_IsWritable]
+        )
     }
 }
 
