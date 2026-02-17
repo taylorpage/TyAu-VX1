@@ -28,12 +28,12 @@ struct VUMeter: View {
         self.height = height
     }
 
-    // Map DSP output level (dB) to VU meter 0.0-1.0 range.
-    // VU scale: -20 dB = 0.0, +3 dB = 1.0 (standard VU operating point: 0 dBVU = 0.75)
+    // Map gain reduction (dB, 0–40) to VU meter 0.0–1.0 range.
+    // 0 dB GR = needle far LEFT (0.0), 40 dB GR = needle far RIGHT (1.0).
     private var normalizedValue: Double {
-        let db = Double(param.value)
-        let clamped = max(-20.0, min(3.0, db))
-        return (clamped - (-20.0)) / (3.0 - (-20.0))
+        let gr = Double(param.value)
+        let clamped = max(0.0, min(40.0, gr))
+        return clamped / 40.0
     }
 
     // Needle angle based on a normalized value (0.0 to 1.0)
@@ -43,29 +43,15 @@ struct VUMeter: View {
         return .degrees(degrees + 90)
     }
 
-    // VU meter dB scale labels
+    // GR scale labels — 0 dB at left (0.0), increasing GR to the right, max 40 dB at right (1.0)
     private let scaleLabels = [
-        (value: 0.0,   label: "-20"),
-        (value: 0.167, label: "-10"),
-        (value: 0.25,  label: "-7"),
-        (value: 0.375, label: "-5"),
-        (value: 0.5,   label: "-3"),
-        (value: 0.583, label: "-2"),
-        (value: 0.667, label: "-1"),
-        (value: 0.75,  label: "0"),
-        (value: 0.833, label: "+1"),
-        (value: 0.917, label: "+2"),
-        (value: 1.0,   label: "+3")
-    ]
-
-    // Percentage scale labels (non-linear, matching vintage VU meters)
-    private let percentageLabels = [
-        (value: 0.0,  label: "0"),
-        (value: 0.10, label: "20"),
-        (value: 0.22, label: "40"),
-        (value: 0.37, label: "60"),
-        (value: 0.54, label: "80"),
-        (value: 0.75, label: "100")
+        (value: 0.0,   label: "0"),
+        (value: 0.125, label: "5"),
+        (value: 0.25,  label: "10"),
+        (value: 0.375, label: "15"),
+        (value: 0.5,   label: "20"),
+        (value: 0.75,  label: "30"),
+        (value: 1.0,   label: "40"),
     ]
 
     var body: some View {
@@ -139,7 +125,6 @@ struct VUMeter: View {
                 redDangerZone
                 tickMarks
                 dbScaleLabels
-                percentageScaleLabels
 
                 // VU label (bottom right)
                 GeometryReader { geometry in
@@ -186,8 +171,8 @@ struct VUMeter: View {
 
     private var redDangerZone: some View {
         GeometryReader { geometry in
-            let redStartValue: Double = 0.75  // 0 dB
-            let redEndValue: Double = 1.0     // +3 dB
+            let redStartValue: Double = 0.75   // 30 dB GR
+            let redEndValue: Double = 1.0      // 40 dB GR (extreme compression)
 
             Path { path in
                 let centerX = geometry.size.width / 2
@@ -282,44 +267,6 @@ struct VUMeter: View {
         }
     }
 
-    // MARK: - Percentage Scale
-
-    private var percentageScaleLabels: some View {
-        GeometryReader { geometry in
-            ForEach(percentageLabels.indices, id: \.self) { index in
-                let item = percentageLabels[index]
-                let angle = startAngle + (item.value * (endAngle - startAngle))
-                let centerX = geometry.size.width / 2
-                let centerY = geometry.size.height / 2
-                let pivotY = centerY + height * 0.60
-                let labelRadius = height * 0.92
-                let angleRad = angle * .pi / 180
-                let x = centerX + labelRadius * cos(angleRad)
-                let y = pivotY + labelRadius * sin(angleRad)
-
-                Text(item.label)
-                    .font(.system(size: height * 0.07, weight: .medium, design: .default))
-                    .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.3))
-                    .position(x: x, y: y)
-            }
-
-            // "%" symbol next to 100
-            let maxItem = percentageLabels.last!
-            let angle = startAngle + (maxItem.value * (endAngle - startAngle))
-            let centerX = geometry.size.width / 2
-            let centerY = geometry.size.height / 2
-            let pivotY = centerY + height * 0.60
-            let labelRadius = height * 0.92
-            let angleRad = angle * .pi / 180
-            let x = centerX + labelRadius * cos(angleRad)
-            let y = pivotY + labelRadius * sin(angleRad)
-
-            Text("%")
-                .font(.system(size: height * 0.06, weight: .medium, design: .default))
-                .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.3))
-                .position(x: x + 15, y: y)
-        }
-    }
 
     // MARK: - Needle
 
