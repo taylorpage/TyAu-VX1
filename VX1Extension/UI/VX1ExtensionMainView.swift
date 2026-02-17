@@ -47,17 +47,24 @@ struct VX1ExtensionMainView: View {
 
                 // Main controls grid
                 VStack(spacing: 8) {
-                    // Top row: Threshold and Ratio
-                    HStack(spacing: 15) {
+                    // Top row: Input, Threshold, Ratio
+                    HStack(spacing: 12) {
                         VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.threshold, size: 65)
+                            ParameterKnob(param: parameterTree.global.inputGain, size: 60)
+                            Text("INPUT")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(Color(red: 0.2, green: 0.8, blue: 1.0))
+                        }
+
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.threshold, size: 60)
                             Text("THRESHOLD")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
                         }
 
                         VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.ratio, size: 65)
+                            ParameterKnob(param: parameterTree.global.ratio, size: 60)
                             Text("RATIO")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
@@ -105,7 +112,7 @@ struct VX1ExtensionMainView: View {
                         }
                     }
 
-                    // Fourth row: Makeup Gain and Drive
+                    // Fourth row: Makeup Gain and Sheen
                     HStack(spacing: 15) {
                         VStack(spacing: 2) {
                             ParameterKnob(param: parameterTree.global.makeupGain, size: 65)
@@ -131,8 +138,8 @@ struct VX1ExtensionMainView: View {
                         }
 
                         VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.drive, size: 65)
-                            Text("DRIVE")
+                            ParameterKnob(param: parameterTree.global.sheen, size: 65)
+                            Text("SHEEN")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
                         }

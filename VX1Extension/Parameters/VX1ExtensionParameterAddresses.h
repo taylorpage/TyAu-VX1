@@ -19,8 +19,9 @@ typedef NS_ENUM(AUParameterAddress, VX1ExtensionParameterAddress) {
     mix = 6,
     knee = 7,
     detection = 8,
-    drive = 9,
+    sheen = 9,
     autoMakeup = 10,
     gainReductionMeter = 11,  // Read-only meter value
-    lookAhead = 12            // Look-ahead time: 0=Off, 1=2ms, 2=5ms, 3=10ms
+    lookAhead = 12,           // Look-ahead time: 0=Off, 1=2ms, 2=5ms, 3=10ms
+    inputGain = 13            // Pre-compression input gain: 0 to +24 dB
 };

@@ -83,9 +83,9 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             defaultValue: 100.0
         )
         ParameterSpec(
-            address: .drive,
-            identifier: "drive",
-            name: "Drive",
+            address: .sheen,
+            identifier: "sheen",
+            name: "Sheen",
             units: .percent,
             valueRange: 0.0...100.0,
             defaultValue: 25.0
@@ -115,6 +115,14 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             valueRange: 0.0...3.0,
             defaultValue: 0.0,
             valueStrings: ["Off", "2ms", "5ms", "10ms"]
+        )
+        ParameterSpec(
+            address: .inputGain,
+            identifier: "inputGain",
+            name: "Input",
+            units: .decibels,
+            valueRange: 0.0...24.0,
+            defaultValue: 0.0
         )
     }
 }
