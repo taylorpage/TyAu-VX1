@@ -10,29 +10,22 @@ The VX1 is a professional vocal compressor plugin designed to deliver aggressive
 
 ```
 Input Signal
-    ↓
-[1] Peak/RMS Detection (blendable)
-    ↓
-[2] Envelope Follower (Attack/Release)
-    ↓
-[3] Gain Reduction Calculation (Threshold, Ratio, Knee)
-    ↓
-    ├─→ [Metering] Track GR for visual feedback (needs debug)
-    ↓
-[4] Apply Compression to Signal
-    ↓
-[5] Tape Saturation (Drive)
-    ↓
-[6] Makeup Gain (Manual + Auto if enabled)
-    ↓
-[7] Parallel Mix (Dry/Wet blend)
-    ↓
-Output Signal
+    ├─→ [Detection path] Peak/RMS blend → Envelope Follower → Gain Reduction Calc
+    |                                                               ↓
+    └─→ [Audio path] Ring Buffer (Look-Ahead delay) ──────→ Apply GR → Saturation → Makeup → Mix
+                                                                                               ↓
+                                                                                        Output Signal
 ```
 
-**New in this version:**
+When Look-Ahead is Off, the ring buffer is bypassed and signal flow is direct:
+```
+Input → Detection → Envelope → GR Calc → Apply GR → Saturation → Makeup → Mix → Output
+```
+
+**Features:**
 - **Auto Makeup Gain**: Automatically compensates for compression (80% of average GR)
-- **Visual Metering**: Gain reduction meter with smooth ballistics (debugging in progress)
+- **Look-Ahead**: Compressor detects transients before they arrive; audio delayed to match
+- **Visual Metering**: Gain reduction meter with smooth ballistics, 60 Hz updates
 
 ---
 
@@ -173,6 +166,26 @@ Output Signal
 
 ---
 
+### Timing
+
+#### **Look-Ahead** (Off / 2ms / 5ms / 10ms)
+- **What it does**: Delays the audio path so the compressor can react to transients before they arrive
+- **Default**: Off
+- **How it works**:
+  - Detection runs on the current (live) input signal
+  - Audio is delayed by the selected amount via a ring buffer
+  - The DAW receives a reported latency equal to the look-ahead time and compensates automatically
+- **Sweet spots**:
+  - **Off**: Zero added latency, standard compression
+  - **2ms**: Catches fast vocal consonants without obvious latency
+  - **5ms**: Good all-around transient control — recommended starting point
+  - **10ms**: Maximum transient suppression, suited to peak-heavy sources
+- **When to use it**:
+  - **ON (2–5ms)**: JJP-style aggressive control where fast attack alone isn't enough
+  - **OFF**: Live monitoring or when DAW latency compensation is unavailable
+
+---
+
 ### Visual Feedback
 
 #### **Gain Reduction Meter**
@@ -190,7 +203,7 @@ Output Signal
   - **Aggressive**: 15-20 dB
   - **Limiting**: 20+ dB
 
-**Note**: Meter display is currently being debugged and may show "-0.0 dB" even when compression is active. Functionality is implemented but needs troubleshooting.
+**Note**: Meter is fully working with smooth ballistics (fast attack, adaptive release). Updates at 60 Hz.
 
 ---
 

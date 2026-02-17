@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <span>
 #include <cmath>
+#include <vector>
 
 #include "VX1ExtensionParameterAddresses.h"
 
@@ -22,12 +23,20 @@ class VX1ExtensionDSPKernel {
 public:
     void initialize(int inputChannelCount, int outputChannelCount, double inSampleRate) {
         mSampleRate = inSampleRate;
+        mChannelCount = inputChannelCount;
 
         // Initialize computed coefficients
         mThresholdLinear = std::pow(10.0f, mThresholdDb / 20.0f);
         mMakeupGainLinear = std::pow(10.0f, mMakeupGainDb / 20.0f);
         mAttackCoeff = std::exp(-1.0f / (mAttackMs * 0.001f * mSampleRate));
         mReleaseCoeff = std::exp(-1.0f / (mReleaseMs * 0.001f * mSampleRate));
+
+        // Allocate look-ahead ring buffer: max 10ms at current sample rate, per channel
+        // Always allocate max capacity so we never reallocate mid-stream
+        int maxLookAheadSamples = static_cast<int>(std::ceil(0.010 * mSampleRate));
+        mRingBuffer.assign(inputChannelCount, std::vector<float>(maxLookAheadSamples, 0.0f));
+        mRingWritePos = 0;
+        mLookAheadSamples = lookAheadIndexToSamples(mLookAheadIndex);
 
         // Reset state
         mEnvelopeLevel = 0.0f;
@@ -38,6 +47,8 @@ public:
         mEnvelopeLevel = 0.0f;
         mAvgGainReductionDb = 0.0f;
         mCurrentGainReductionDb = 0.0f;
+        mRingBuffer.clear();
+        mRingWritePos = 0;
     }
 
     // MARK: - Bypass
@@ -89,6 +100,10 @@ public:
             case VX1ExtensionParameterAddress::autoMakeup:
                 mAutoMakeupEnabled = (value >= 0.5f);
                 break;
+            case VX1ExtensionParameterAddress::lookAhead:
+                mLookAheadIndex = static_cast<int>(value + 0.5f);
+                mLookAheadSamples = lookAheadIndexToSamples(mLookAheadIndex);
+                break;
         }
     }
 
@@ -118,6 +133,8 @@ public:
                 return (AUValue)(mAutoMakeupEnabled ? 1.0f : 0.0f);
             case VX1ExtensionParameterAddress::gainReductionMeter:
                 return (AUValue)mCurrentGainReductionDb;
+            case VX1ExtensionParameterAddress::lookAhead:
+                return (AUValue)mLookAheadIndex;
             default:
                 return 0.f;
         }
@@ -135,6 +152,21 @@ public:
     // MARK: - Musical Context
     void setMusicalContextBlock(AUHostMusicalContextBlock contextBlock) {
         mMusicalContextBlock = contextBlock;
+    }
+
+    // MARK: - Look-Ahead Helper
+
+    /// Returns the look-ahead delay in samples for the given step index.
+    /// Steps: 0=Off (0ms), 1=2ms, 2=5ms, 3=10ms
+    int lookAheadIndexToSamples(int index) const {
+        static const float kStepMs[4] = { 0.0f, 2.0f, 5.0f, 10.0f };
+        int clamped = std::max(0, std::min(3, index));
+        return static_cast<int>(kStepMs[clamped] * 0.001f * mSampleRate);
+    }
+
+    /// Returns the current look-ahead time in seconds (used for host latency reporting).
+    double lookAheadSeconds() const {
+        return lookAheadIndexToSamples(mLookAheadIndex) / mSampleRate;
     }
 
     // MARK: - Saturation
@@ -184,9 +216,14 @@ public:
             // Track peak gain reduction in this buffer
             float peakGainReductionDb = 0.0f;
 
+            const int lookAheadSamples = mLookAheadSamples;
+            const bool usingLookAhead = (lookAheadSamples > 0) && !mRingBuffer.empty();
+            const int ringSize = usingLookAhead ? static_cast<int>(mRingBuffer[0].size()) : 0;
+
             // Process each frame
             for (UInt32 frameIndex = 0; frameIndex < frameCount; ++frameIndex) {
-                // Calculate both peak and RMS across all channels
+
+                // --- Detection: always runs on the current (undelayed) input ---
                 float peak = 0.0f;
                 float sumSquares = 0.0f;
                 for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
@@ -245,10 +282,22 @@ public:
                 float mixDry = 1.0f - mixWet;
 
                 for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
-                    float input = inputBuffers[channel][frameIndex];
+                    float currentInput = inputBuffers[channel][frameIndex];
 
-                    // Apply compression
-                    float compressed = input * gainReduction;
+                    // --- Look-ahead: audio path uses the delayed sample from the ring buffer ---
+                    float audioInput;
+                    if (usingLookAhead) {
+                        // Read the oldest sample (delayed by lookAheadSamples)
+                        int readPos = (mRingWritePos - lookAheadSamples + ringSize) % ringSize;
+                        audioInput = mRingBuffer[channel][readPos];
+                        // Write the current input into the ring buffer
+                        mRingBuffer[channel][mRingWritePos] = currentInput;
+                    } else {
+                        audioInput = currentInput;
+                    }
+
+                    // Apply compression to the (possibly delayed) audio
+                    float compressed = audioInput * gainReduction;
 
                     // Apply saturation to compressed signal
                     float saturated = applySaturation(compressed, mDrivePercent);
@@ -257,8 +306,14 @@ public:
                     saturated *= totalMakeupGainLinear;
 
                     // Parallel mix: blend dry and processed signals
-                    float output = (input * mixDry) + (saturated * mixWet);
+                    // Dry signal is also the delayed audio so timing stays aligned
+                    float output = (audioInput * mixDry) + (saturated * mixWet);
                     outputBuffers[channel][frameIndex] = output;
+                }
+
+                // Advance ring buffer write position once per frame (after all channels)
+                if (usingLookAhead) {
+                    mRingWritePos = (mRingWritePos + 1) % ringSize;
                 }
             }
 
@@ -327,7 +382,14 @@ public:
     float mReleaseCoeff = 0.0f;     // exp(-1/(releaseMs * 0.001 * sampleRate))
 
     // State
-    float mEnvelopeLevel = 0.0f;    // Envelope follower state
-    float mAvgGainReductionDb = 0.0f;  // Smoothed average gain reduction for auto makeup
+    float mEnvelopeLevel = 0.0f;           // Envelope follower state
+    float mAvgGainReductionDb = 0.0f;      // Smoothed average gain reduction for auto makeup
     float mCurrentGainReductionDb = 0.0f;  // Current gain reduction for metering
+
+    // Look-ahead
+    int mLookAheadIndex = 0;               // 0=Off, 1=2ms, 2=5ms, 3=10ms
+    int mLookAheadSamples = 0;             // Derived sample count from index
+    int mChannelCount = 2;                 // Set during initialize()
+    std::vector<std::vector<float>> mRingBuffer; // Per-channel delay line [channel][sample]
+    int mRingWritePos = 0;                 // Current write position in ring buffer
 };

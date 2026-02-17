@@ -137,6 +137,30 @@ struct VX1ExtensionMainView: View {
                                 .foregroundColor(.white.opacity(0.8))
                         }
                     }
+
+                    // Fifth row: Look-Ahead
+                    VStack(spacing: 4) {
+                        Text("LOOK-AHEAD")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.8))
+                        Picker("", selection: Binding(
+                            get: { Int(lookAheadParam.value) },
+                            set: { newValue in
+                                lookAheadParam.onEditingChanged(true)
+                                lookAheadParam.value = Float(newValue)
+                                lookAheadParam.onEditingChanged(false)
+                            }
+                        )) {
+                            Text("Off").tag(0)
+                            Text("2ms").tag(1)
+                            Text("5ms").tag(2)
+                            Text("10ms").tag(3)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                        .colorMultiply(Color(red: 0.2, green: 0.8, blue: 1.0))
+                    }
+                    .padding(.top, 4)
                 }
                 .padding(.vertical, 5)
 
@@ -153,7 +177,7 @@ struct VX1ExtensionMainView: View {
             }
             .padding(12)
         }
-        .frame(width: 350, height: 540)
+        .frame(width: 350, height: 580)
     }
 
     // MARK: - Computed Properties
@@ -168,5 +192,9 @@ struct VX1ExtensionMainView: View {
 
     var gainReductionParam: ObservableAUParameter {
         parameterTree.global.gainReductionMeter
+    }
+
+    var lookAheadParam: ObservableAUParameter {
+        parameterTree.global.lookAhead
     }
 }

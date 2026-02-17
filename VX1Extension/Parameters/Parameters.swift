@@ -107,6 +107,15 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             defaultValue: 0.0,
             flags: [.flag_IsReadable, .flag_IsWritable]  // Writable for internal updates, but controlled by DSP
         )
+        ParameterSpec(
+            address: .lookAhead,
+            identifier: "lookAhead",
+            name: "Look-Ahead",
+            units: .indexed,
+            valueRange: 0.0...3.0,
+            defaultValue: 0.0,
+            valueStrings: ["Off", "2ms", "5ms", "10ms"]
+        )
     }
 }
 

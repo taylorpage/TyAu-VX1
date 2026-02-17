@@ -21,5 +21,6 @@ typedef NS_ENUM(AUParameterAddress, VX1ExtensionParameterAddress) {
     detection = 8,
     drive = 9,
     autoMakeup = 10,
-    gainReductionMeter = 11  // Read-only meter value
+    gainReductionMeter = 11,  // Read-only meter value
+    lookAhead = 12            // Look-ahead time: 0=Off, 1=2ms, 2=5ms, 3=10ms
 };

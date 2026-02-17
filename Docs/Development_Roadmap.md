@@ -62,8 +62,21 @@
 ---
 
 #### 1.2 Look-Ahead ⭐⭐
-**Status**: ❌ REMOVED — not needed for vocal compression
-**Decision**: Look-ahead was implemented and reverted. For vocals, the Detection (Peak/RMS blend) knob already provides equivalent transient control without the complexity and latency overhead. Look-ahead is more valuable on bus/drum compressors. Replaced in priority by Sidechain HPF.
+**Status**: ✅ IMPLEMENTED
+**How it works**:
+- Fixed-step control: Off / 2ms / 5ms / 10ms
+- Detection path runs on the current (undelayed) input — compressor "sees" transients before they arrive
+- Audio path is delayed by a matching ring buffer allocated once at `initialize()`, never mid-stream
+- Host latency reported via `AUAudioUnit.latency` override so DAWs auto-compensate timeline alignment
+
+**Implementation Details**:
+- Ring buffer: `VX1ExtensionDSPKernel.hpp` — `mRingBuffer`, `mRingWritePos`, `mLookAheadSamples`
+- Helper: `lookAheadIndexToSamples()`, `lookAheadSeconds()`
+- Latency reporting: `VX1ExtensionAudioUnit.swift` `latency` property
+- Parameter: `lookAhead` (indexed 0–3), address 12
+- UI: Segmented picker (Off/2ms/5ms/10ms) in `VX1ExtensionMainView.swift`
+
+**Why it was previously removed**: The old implementation caused audio pops because it reset the delay buffer mid-stream during parameter changes. This version avoids that by allocating at max capacity upfront and never flushing during playback.
 
 ---
 
@@ -224,7 +237,7 @@
 1. ✅ Auto Makeup Gain — toggleable 80% GR compensation
 2. ✅ Gain Reduction Meter — fully working with smooth ballistics
 3. ✅ DSP Stability — clean envelope follower, no mid-stream pops
-4. ❌ Look-Ahead — removed, not needed for vocal compression
+4. ✅ Look-Ahead — reimplemented with ring buffer; Off/2ms/5ms/10ms steps; host latency reported
 
 ### Sprint 2: Professional Features
 1. Sidechain High-Pass Filter
@@ -265,9 +278,9 @@
 - **Parameter Addresses**: `VX1Extension/Parameters/VX1ExtensionParameterAddresses.h`
 
 ### Parameter Count
-- **Current**: 12 parameters (threshold, ratio, attack, release, makeupGain, bypass, mix, knee, detection, drive, autoMakeup, gainReductionMeter)
-- **User-controllable**: 11 (gainReductionMeter is read-only for metering)
-- **UI Layout**: Increased window height to 540px to accommodate meter
+- **Current**: 13 parameters (threshold, ratio, attack, release, makeupGain, bypass, mix, knee, detection, drive, autoMakeup, gainReductionMeter, lookAhead)
+- **User-controllable**: 12 (gainReductionMeter is read-only for metering)
+- **UI Layout**: Window height 580px to accommodate meter + look-ahead row
 - **Space available**: Limited - may need tabbed interface for advanced features in Sprint 3+
 
 ---
@@ -324,7 +337,7 @@
 ## Questions to Resolve
 
 1. ✅ **Auto Makeup Gain**: RESOLVED - Toggleable with switch below knob
-2. ✅ **Look-Ahead**: RESOLVED - Removed, not appropriate for vocal compressor
+2. ✅ **Look-Ahead**: RESOLVED - Reimplemented with ring buffer + host latency reporting
 3. ✅ **Meter Debugging**: RESOLVED - Meter fully working
 4. **Sidechain HPF**: Fixed frequencies or continuous sweep?
 5. **De-esser**: Separate module or integrated into main compression?
