@@ -15,7 +15,7 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             identifier: "threshold",
             name: "Threshold",
             units: .decibels,
-            valueRange: -60.0...0.0,
+            valueRange: -50.0...0.0,
             defaultValue: -20.0
         )
         ParameterSpec(
@@ -23,7 +23,7 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             identifier: "ratio",
             name: "Ratio",
             units: .ratio,
-            valueRange: 1.0...20.0,
+            valueRange: 1.0...30.0,
             defaultValue: 4.0
         )
         ParameterSpec(
@@ -31,7 +31,7 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             identifier: "attack",
             name: "Attack",
             units: .milliseconds,
-            valueRange: 0.1...100.0,
+            valueRange: 0.0...200.0,
             defaultValue: 10.0
         )
         ParameterSpec(
@@ -39,7 +39,7 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             identifier: "release",
             name: "Release",
             units: .milliseconds,
-            valueRange: 10.0...1000.0,
+            valueRange: 5.0...5000.0,
             defaultValue: 100.0
         )
         ParameterSpec(
@@ -47,7 +47,7 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             identifier: "makeupGain",
             name: "Makeup Gain",
             units: .decibels,
-            valueRange: 0.0...24.0,
+            valueRange: -20.0...50.0,
             defaultValue: 0.0
         )
         ParameterSpec(
@@ -57,6 +57,55 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             units: .boolean,
             valueRange: 0.0...1.0,
             defaultValue: 0.0
+        )
+        ParameterSpec(
+            address: .mix,
+            identifier: "mix",
+            name: "Mix",
+            units: .percent,
+            valueRange: 0.0...100.0,
+            defaultValue: 100.0
+        )
+        ParameterSpec(
+            address: .knee,
+            identifier: "knee",
+            name: "Knee",
+            units: .decibels,
+            valueRange: 0.0...12.0,
+            defaultValue: 3.0
+        )
+        ParameterSpec(
+            address: .detection,
+            identifier: "detection",
+            name: "Detection",
+            units: .percent,
+            valueRange: 0.0...100.0,
+            defaultValue: 100.0
+        )
+        ParameterSpec(
+            address: .drive,
+            identifier: "drive",
+            name: "Drive",
+            units: .percent,
+            valueRange: 0.0...100.0,
+            defaultValue: 25.0
+        )
+        ParameterSpec(
+            address: .autoMakeup,
+            identifier: "autoMakeup",
+            name: "Auto Makeup",
+            units: .boolean,
+            valueRange: 0.0...1.0,
+            defaultValue: 0.0
+        )
+        ParameterSpec(
+            address: .gainReductionMeter,
+            identifier: "gainReductionMeter",
+            name: "Gain Reduction",
+            units: .decibels,
+            valueRange: 0.0...60.0,
+            defaultValue: 0.0,
+            flags: [.flag_IsReadable, .flag_IsWritable]  // Writable for internal updates, but controlled by DSP
         )
     }
 }

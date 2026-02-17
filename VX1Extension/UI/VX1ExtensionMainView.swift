@@ -23,64 +23,122 @@ struct VX1ExtensionMainView: View {
             )
             .cornerRadius(8)
 
-            VStack(spacing: 15) {
+            VStack(spacing: 8) {
                 // Title
                 Text("VX1 COMPRESSOR")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.top, 15)
+                    .padding(.top, 10)
 
                 // LED indicator
                 Circle()
                     .fill(bypassParam.boolValue ? Color.gray : Color(red: 0.2, green: 0.8, blue: 1.0))
-                    .frame(width: 10, height: 10)
-                    .shadow(color: bypassParam.boolValue ? .clear : Color(red: 0.2, green: 0.8, blue: 1.0).opacity(0.8), radius: 6)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: bypassParam.boolValue ? .clear : Color(red: 0.2, green: 0.8, blue: 1.0).opacity(0.8), radius: 4)
+
+                // Gain Reduction Meter
+                VStack(spacing: 2) {
+                    Text("GAIN REDUCTION")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.8))
+                    GainReductionMeter(param: gainReductionParam)
+                }
+                .padding(.vertical, 8)
 
                 // Main controls grid
-                VStack(spacing: 20) {
+                VStack(spacing: 8) {
                     // Top row: Threshold and Ratio
-                    HStack(spacing: 30) {
-                        VStack(spacing: 8) {
-                            ParameterKnob(param: parameterTree.global.threshold, size: 80)
+                    HStack(spacing: 15) {
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.threshold, size: 65)
                             Text("THRESHOLD")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.9))
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
                         }
 
-                        VStack(spacing: 8) {
-                            ParameterKnob(param: parameterTree.global.ratio, size: 80)
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.ratio, size: 65)
                             Text("RATIO")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.9))
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
                         }
                     }
 
-                    // Middle row: Attack and Release
-                    HStack(spacing: 30) {
-                        VStack(spacing: 8) {
-                            ParameterKnob(param: parameterTree.global.attack, size: 80)
+                    // Second row: Attack and Release
+                    HStack(spacing: 15) {
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.attack, size: 65)
                             Text("ATTACK")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.9))
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
                         }
 
-                        VStack(spacing: 8) {
-                            ParameterKnob(param: parameterTree.global.release, size: 80)
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.release, size: 65)
                             Text("RELEASE")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.9))
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
                         }
                     }
 
-                    // Bottom row: Makeup Gain
-                    VStack(spacing: 8) {
-                        ParameterKnob(param: parameterTree.global.makeupGain, size: 90)
-                        Text("MAKEUP GAIN")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.9))
+                    // Third row: Mix, Knee, and Detection
+                    HStack(spacing: 15) {
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.mix, size: 65)
+                            Text("MIX")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.knee, size: 65)
+                            Text("KNEE")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.detection, size: 65)
+                            Text("DETECT")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+
+                    // Fourth row: Makeup Gain and Drive
+                    HStack(spacing: 15) {
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.makeupGain, size: 65)
+                            Text("MAKEUP")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+
+                            // Auto makeup toggle
+                            Toggle(isOn: Binding(
+                                get: { autoMakeupParam.boolValue },
+                                set: { newValue in
+                                    autoMakeupParam.onEditingChanged(true)
+                                    autoMakeupParam.boolValue = newValue
+                                    autoMakeupParam.onEditingChanged(false)
+                                }
+                            )) {
+                                Text("AUTO")
+                                    .font(.system(size: 7, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                            .toggleStyle(.switch)
+                            .scaleEffect(0.6)
+                        }
+
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.drive, size: 65)
+                            Text("DRIVE")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
                     }
                 }
-                .padding(.vertical, 10)
+                .padding(.vertical, 5)
 
                 Spacer()
 
@@ -89,18 +147,26 @@ struct VX1ExtensionMainView: View {
 
                 // Logo
                 Text("TaylorAudio")
-                    .font(.caption)
+                    .font(.system(size: 9))
                     .foregroundColor(.gray)
-                    .padding(.bottom, 15)
+                    .padding(.bottom, 8)
             }
-            .padding()
+            .padding(12)
         }
-        .frame(width: 400, height: 550)
+        .frame(width: 350, height: 540)
     }
 
     // MARK: - Computed Properties
 
     var bypassParam: ObservableAUParameter {
         parameterTree.global.bypass
+    }
+
+    var autoMakeupParam: ObservableAUParameter {
+        parameterTree.global.autoMakeup
+    }
+
+    var gainReductionParam: ObservableAUParameter {
+        parameterTree.global.gainReductionMeter
     }
 }

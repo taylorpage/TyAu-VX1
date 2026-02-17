@@ -18,6 +18,9 @@ public class VX1ExtensionAudioUnit: AUAudioUnit, @unchecked Sendable
     private var _inputBusses: AUAudioUnitBusArray!
     private var _outputBusses: AUAudioUnitBusArray!
 
+    // Meter update timer
+    private var meterUpdateTimer: Timer?
+
 	@objc override init(componentDescription: AudioComponentDescription, options: AudioComponentInstantiationOptions) throws {
 		let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
 		try super.init(componentDescription: componentDescription, options: options)
@@ -86,12 +89,24 @@ public class VX1ExtensionAudioUnit: AUAudioUnit, @unchecked Sendable
 
         processHelper?.setChannelCount(inputChannelCount, outputChannelCount)
 
+        // Start meter update timer
+        startMeterUpdateTimer()
+
 		try super.allocateRenderResources()
 	}
 
     // Deallocate resources allocated in allocateRenderResourcesAndReturnError:
     // Subclassers should call the superclass implementation.
     public override func deallocateRenderResources() {
+        // Reset meter to 0 before stopping timer
+        if let parameterTree = parameterTree,
+           let grMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.gainReductionMeter.rawValue) {
+            grMeter.setValue(0.0, originator: nil)
+        }
+
+        // Stop meter update timer
+        stopMeterUpdateTimer()
+
         // Deallocate your resources.
         kernel.deInitialize()
 
@@ -128,4 +143,32 @@ public class VX1ExtensionAudioUnit: AUAudioUnit, @unchecked Sendable
 			return NSString.localizedStringWithFormat("%.f", value) as String
 		}
 	}
+
+    // MARK: - Meter Update
+    private func startMeterUpdateTimer() {
+        stopMeterUpdateTimer()
+
+        // Update meters at 60 Hz for smooth visual feedback
+        // Schedule on main run loop to ensure UI updates work correctly
+        DispatchQueue.main.async { [weak self] in
+            self?.meterUpdateTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+                self?.updateMeters()
+            }
+        }
+    }
+
+    private func stopMeterUpdateTimer() {
+        meterUpdateTimer?.invalidate()
+        meterUpdateTimer = nil
+    }
+
+    private func updateMeters() {
+        guard let parameterTree = parameterTree else { return }
+
+        // Update gain reduction meter
+        if let grMeter = parameterTree.parameter(withAddress: VX1ExtensionParameterAddress.gainReductionMeter.rawValue) {
+            let currentGR = kernel.getParameter(VX1ExtensionParameterAddress.gainReductionMeter.rawValue)
+            grMeter.setValue(currentGR, originator: nil)
+        }
+    }
 }
