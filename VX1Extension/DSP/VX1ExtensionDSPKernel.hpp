@@ -179,34 +179,8 @@ public:
             for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
                 std::copy_n(inputBuffers[channel], frameCount, outputBuffers[channel]);
             }
-            // Reset all state when bypassed
             mCurrentGainReductionDb = 0.0f;
-            mAvgGainReductionDb = 0.0f;
-            mEnvelopeLevel = 0.0f;
         } else {
-            // First, check if the entire buffer is essentially silent
-            // This allows us to quickly reset state when audio stops
-            bool bufferIsSilent = true;
-            for (UInt32 channel = 0; channel < inputBuffers.size() && bufferIsSilent; ++channel) {
-                for (UInt32 i = 0; i < frameCount; ++i) {
-                    if (std::abs(inputBuffers[channel][i]) > 1e-6f) {
-                        bufferIsSilent = false;
-                        break;
-                    }
-                }
-            }
-
-            // If buffer is silent, reset state immediately and pass through
-            if (bufferIsSilent) {
-                for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
-                    std::copy_n(inputBuffers[channel], frameCount, outputBuffers[channel]);
-                }
-                mEnvelopeLevel = 0.0f;
-                mAvgGainReductionDb = 0.0f;
-                mCurrentGainReductionDb = 0.0f;
-                return;
-            }
-
             // Track peak gain reduction in this buffer
             float peakGainReductionDb = 0.0f;
 
@@ -228,22 +202,8 @@ public:
                 float detectionLevel = (peak * (1.0f - detectionBlend)) + (rms * detectionBlend);
 
                 // Envelope follower (attack/release)
-                // Use faster release coefficient when input is essentially silent
-                // This allows the meter to reset quickly when audio stops
-                float coeff;
-                if (detectionLevel > mEnvelopeLevel) {
-                    coeff = mAttackCoeff;  // Attack
-                } else if (detectionLevel < 1e-5f) {
-                    // Input is essentially silent - reset envelope very quickly
-                    mEnvelopeLevel = 0.0f;
-                    coeff = 0.0f;  // Will be ignored since we set envelope to 0
-                } else {
-                    coeff = mReleaseCoeff;  // Normal release
-                }
-
-                if (detectionLevel >= 1e-5f) {
-                    mEnvelopeLevel = coeff * mEnvelopeLevel + (1.0f - coeff) * detectionLevel;
-                }
+                float coeff = (detectionLevel > mEnvelopeLevel) ? mAttackCoeff : mReleaseCoeff;
+                mEnvelopeLevel = coeff * mEnvelopeLevel + (1.0f - coeff) * detectionLevel;
 
                 // Calculate gain reduction with soft knee
                 float gainReduction = 1.0f;
