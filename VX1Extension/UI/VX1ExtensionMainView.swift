@@ -117,6 +117,16 @@ struct VX1ExtensionMainView: View {
                         }
                     }
 
+                    // Fifth row: Stack (double compression blend)
+                    HStack(spacing: 15) {
+                        VStack(spacing: 2) {
+                            ParameterKnob(param: parameterTree.global.stack, size: 65)
+                            Text("STACK")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(Color(red: 0.4, green: 0.8, blue: 1.0))
+                        }
+                    }
+
                 }
                 .padding(.vertical, 5)
 
@@ -133,7 +143,7 @@ struct VX1ExtensionMainView: View {
             }
             .padding(12)
         }
-        .frame(width: 350, height: 680)
+        .frame(width: 350, height: 770)
     }
 
     // MARK: - Computed Properties

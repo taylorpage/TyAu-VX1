@@ -83,6 +83,14 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             defaultValue: 25.0
         )
         ParameterSpec(
+            address: .stack,
+            identifier: "stack",
+            name: "Stack",
+            units: .percent,
+            valueRange: 0.0...100.0,
+            defaultValue: 0.0
+        )
+        ParameterSpec(
             address: .gainReductionMeter,
             identifier: "gainReductionMeter",
             name: "Gain Reduction",

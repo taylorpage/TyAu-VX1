@@ -79,6 +79,13 @@ public:
         mOvershootDb = 0.0f;
         mOvershootHoldCounter = 0;
 
+        // Reset Stack second-pass state
+        mEnvelopeLevel2 = 0.0f;
+        mRmsState2 = 0.0f;
+        mPrevGainReductionDb2 = 0.0f;
+        mOvershootDb2 = 0.0f;
+        mOvershootHoldCounter2 = 0;
+
         // Reset gate state
         mGateEnvelope = 0.0f;
         mGateGain = 1.0f;
@@ -129,6 +136,9 @@ public:
             case VX1ExtensionParameterAddress::bite:
                 mBitePercent = value;
                 break;
+            case VX1ExtensionParameterAddress::stack:
+                mStackPercent = value;
+                break;
             case VX1ExtensionParameterAddress::gateThreshold:
                 mGateThresholdDb = value;
                 break;
@@ -155,6 +165,8 @@ public:
                 return (AUValue)mGripPercent;
             case VX1ExtensionParameterAddress::bite:
                 return (AUValue)mBitePercent;
+            case VX1ExtensionParameterAddress::stack:
+                return (AUValue)mStackPercent;
             case VX1ExtensionParameterAddress::gainReductionMeter:
                 return (AUValue)mCurrentGainReductionDb;
             case VX1ExtensionParameterAddress::gateThreshold:
@@ -457,6 +469,62 @@ public:
                 // Track peak gain reduction for metering (includes overshoot — meter shows what you hear)
                 peakGainReductionDb = std::max(peakGainReductionDb, totalGainReductionDb);
 
+                // --- Stack: true serial second compression pass ---
+                // Detects on the post-pass-1 signal so the second stage sees an already-compressed
+                // input, just like chaining two hardware units. Stack lowers the second stage's
+                // threshold (making it hit progressively harder as the knob increases).
+                // GR multiplies — no blend/lerp — so at any Stack > 0 you feel the stacking.
+                float stackBlend = mStackPercent / 100.0f;
+                float gainReductionTotal2 = 1.0f;
+
+                if (stackBlend > 0.0f) {
+                    // Sidechain: mono sum of post-pass-1 audio
+                    float monoPost1 = 0.0f;
+                    for (UInt32 ch = 0; ch < inputBuffers.size(); ++ch) {
+                        monoPost1 += inputBuffers[ch][frameIndex] * mGateGain * gainReductionTotal;
+                    }
+                    monoPost1 /= (float)inputBuffers.size();
+                    float absPost1 = std::abs(monoPost1);
+
+                    float peak2 = absPost1;
+                    mRmsState2 = mRmsCoeff * mRmsState2 + (1.0f - mRmsCoeff) * (absPost1 * absPost1);
+                    float rms2 = std::sqrt(mRmsState2);
+
+                    float detectionLevel2 = (rms2 * (1.0f - gripBlend)) + (peak2 * gripBlend);
+                    float coeff2 = (detectionLevel2 > mEnvelopeLevel2) ? blendedAttackCoeff : mReleaseCoeff;
+                    mEnvelopeLevel2 = coeff2 * mEnvelopeLevel2 + (1.0f - coeff2) * detectionLevel2;
+
+                    // Stack knob lowers the second stage threshold proportionally so it bites
+                    // harder as you turn it up. At 100% Stack the threshold is halved in dB.
+                    float thresholdDb2 = mThresholdDb + (mThresholdDb * stackBlend * 0.5f);
+
+                    float gainReductionDb2 = 0.0f;
+                    float envelopeDb2 = 20.0f * std::log10(std::max(mEnvelopeLevel2, 1e-6f));
+                    float overThresholdDb2 = envelopeDb2 - thresholdDb2;
+                    if (overThresholdDb2 > 0.0f) {
+                        gainReductionDb2 = overThresholdDb2 * (1.0f - 1.0f / mRatio);
+                        gainReductionTotal2 = std::pow(10.0f, -gainReductionDb2 / 20.0f);
+                    }
+
+                    // VCA overshoot on pass 2
+                    float grJump2 = gainReductionDb2 - mPrevGainReductionDb2;
+                    if (grJump2 > 3.0f) {
+                        mOvershootDb2 = 3.0f;
+                        mOvershootHoldCounter2 = mOvershootHoldSamples;
+                    }
+                    mPrevGainReductionDb2 = gainReductionDb2;
+                    if (mOvershootHoldCounter2 > 0) {
+                        mOvershootHoldCounter2--;
+                    } else {
+                        mOvershootDb2 *= mOvershootReleaseCoeff;
+                    }
+                    float totalGainReductionDb2 = gainReductionDb2 + mOvershootDb2;
+                    gainReductionTotal2 = std::pow(10.0f, -totalGainReductionDb2 / 20.0f);
+
+                    peakGainReductionDb = std::max(peakGainReductionDb,
+                                                   totalGainReductionDb + totalGainReductionDb2);
+                }
+
                 // Apply compression, saturation, makeup gain, then mix with dry signal
                 float mixWet = mMixPercent / 100.0f;
                 float mixDry = 1.0f - mixWet;
@@ -464,8 +532,8 @@ public:
                 for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
                     float audioInput = inputBuffers[channel][frameIndex] * mGateGain;
 
-                    // Apply compression with VCA overshoot (total GR = compressor GR + overshoot)
-                    float compressed = audioInput * gainReductionTotal;
+                    // Apply pass 1 compression, then pass 2 GR multiplies on top (true serial stacking)
+                    float compressed = audioInput * gainReductionTotal * gainReductionTotal2;
 
                     // Apply sheen saturation (presence-biased harmonic coloration)
                     float saturated = applySaturation(compressed, mBitePercent, (int)channel);
@@ -535,7 +603,8 @@ public:
     float mMakeupGainDb = 0.0f;
     float mMixPercent = 100.0f;
     float mGripPercent = 0.0f;    // 0% = RMS (smooth), 100% = Peak (tight/aggressive)
-    float mBitePercent = 25.0f;       // 0% = Clean, 100% = Aggressive presence-biased harmonic bite
+    float mBitePercent = 25.0f;   // 0% = Clean, 100% = Aggressive presence-biased harmonic bite
+    float mStackPercent = 0.0f;   // 0% = single compression pass, 100% = double compression pass
 
     // Computed/cached values (linear)
     float mThresholdLinear = 0.1f;  // 10^(thresholdDb/20)
@@ -549,6 +618,13 @@ public:
     float mEnvelopeLevel = 0.0f;           // Envelope follower state
     float mRmsState = 0.0f;                // IIR squared-sample accumulator for RMS detection
     float mCurrentGainReductionDb = 0.0f;  // Current gain reduction for metering
+
+    // Stack — second-pass envelope follower state (independent from pass 1)
+    float mEnvelopeLevel2 = 0.0f;
+    float mRmsState2 = 0.0f;
+    float mPrevGainReductionDb2 = 0.0f;
+    float mOvershootDb2 = 0.0f;
+    int   mOvershootHoldCounter2 = 0;
 
     // Channel count
     int mChannelCount = 2;                 // Set during initialize()

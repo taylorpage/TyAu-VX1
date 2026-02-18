@@ -19,6 +19,7 @@ typedef NS_ENUM(AUParameterAddress, VX1ExtensionParameterAddress) {
     mix = 6,
     grip = 8,
     bite = 9,
+    stack = 10,               // Double-compression blend: 0% = single pass, 100% = double pass
     gainReductionMeter = 11,  // Read-only meter value
     gateThreshold = 14        // Noise gate threshold: -80 to -20 dB (-80 dB default = off)
 };
