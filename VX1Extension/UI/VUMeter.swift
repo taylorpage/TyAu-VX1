@@ -95,7 +95,7 @@ struct VUMeter: View {
                         endPoint: .bottom
                     )
                 )
-                .frame(width: width - 20, height: height - 20)
+                .frame(width: width - 4, height: height - 4)
 
             // Inner shadow on meter face for depth
             RoundedRectangle(cornerRadius: 4)
@@ -110,7 +110,7 @@ struct VUMeter: View {
                     ),
                     lineWidth: 2
                 )
-                .frame(width: width - 20, height: height - 20)
+                .frame(width: width - 4, height: height - 4)
 
             // Meter content
             ZStack {
@@ -137,7 +137,7 @@ struct VUMeter: View {
 
                 needleView(value: currentValue)
             }
-            .frame(width: width - 20, height: height - 20)
+            .frame(width: width - 4, height: height - 4)
             .clipShape(RoundedRectangle(cornerRadius: 4))
 
             // Glass/glare overlay
@@ -153,7 +153,7 @@ struct VUMeter: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: width - 20, height: height - 20)
+                .frame(width: width - 4, height: height - 4)
                 .blendMode(.overlay)
         }
         .frame(width: width, height: height)
