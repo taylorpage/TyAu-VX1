@@ -10,8 +10,7 @@
 #include <AudioToolbox/AUParameters.h>
 
 typedef NS_ENUM(AUParameterAddress, VX1ExtensionParameterAddress) {
-    threshold = 0,
-    ratio = 1,
+    compress = 0,             // Combined threshold+ratio control: 0% = no compression, 100% = max compression
     attack = 2,
     release = 3,
     makeupGain = 4,

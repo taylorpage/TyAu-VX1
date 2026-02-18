@@ -71,16 +71,8 @@ struct VX1ExtensionMainView: View {
                     VStack(spacing: 4) {
                         HStack(spacing: 15) {
                             VStack(spacing: 0) {
-                                ParameterKnob(param: parameterTree.global.threshold, size: 65)
-                                Text("THRESHOLD")
-                                    .font(.system(size: 8, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .padding(.top, -22)
-                            }
-
-                            VStack(spacing: 0) {
-                                ParameterKnob(param: parameterTree.global.ratio, size: 65)
-                                Text("RATIO")
+                                ParameterKnob(param: parameterTree.global.compress, size: 65)
+                                Text("COMPRESS")
                                     .font(.system(size: 8, weight: .semibold))
                                     .foregroundColor(.white.opacity(0.8))
                                     .padding(.top, -22)

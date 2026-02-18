@@ -11,20 +11,12 @@ import AudioToolbox
 let VX1ExtensionParameterSpecs = ParameterTreeSpec {
     ParameterGroupSpec(identifier: "global", name: "Global") {
         ParameterSpec(
-            address: .threshold,
-            identifier: "threshold",
-            name: "Threshold",
-            units: .decibels,
-            valueRange: -50.0...0.0,
-            defaultValue: -20.0
-        )
-        ParameterSpec(
-            address: .ratio,
-            identifier: "ratio",
-            name: "Ratio",
-            units: .ratio,
-            valueRange: 1.0...30.0,
-            defaultValue: 4.0
+            address: .compress,
+            identifier: "compress",
+            name: "Compress",
+            units: .percent,
+            valueRange: 0.0...100.0,
+            defaultValue: 30.0
         )
         ParameterSpec(
             address: .attack,

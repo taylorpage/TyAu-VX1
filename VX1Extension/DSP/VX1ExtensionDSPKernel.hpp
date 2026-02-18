@@ -105,13 +105,15 @@ public:
     // MARK: - Parameter Getter / Setter
     void setParameter(AUParameterAddress address, AUValue value) {
         switch (address) {
-            case VX1ExtensionParameterAddress::threshold:
-                mThresholdDb = value;
+            case VX1ExtensionParameterAddress::compress: {
+                mCompressPercent = value;
+                float t = mCompressPercent / 100.0f;          // 0.0 → 1.0 (linear knob position)
+                float tThresh = std::pow(t, 0.2f);             // ^(1/5) curve: threshold drops extremely fast early
+                mThresholdDb = tThresh * -50.0f;               // 0% → 0dB, 100% → -50dB
+                mRatio = 1.0f + t * 29.0f;                    // 0% → 1:1, 100% → 30:1 (linear)
                 mThresholdLinear = std::pow(10.0f, mThresholdDb / 20.0f);
                 break;
-            case VX1ExtensionParameterAddress::ratio:
-                mRatio = value;
-                break;
+            }
             case VX1ExtensionParameterAddress::attack:
                 mAttackMs = value;
                 mAttackCoeff = std::exp(-1.0f / (mAttackMs * 0.001f * mSampleRate));
@@ -147,10 +149,8 @@ public:
 
     AUValue getParameter(AUParameterAddress address) {
         switch (address) {
-            case VX1ExtensionParameterAddress::threshold:
-                return (AUValue)mThresholdDb;
-            case VX1ExtensionParameterAddress::ratio:
-                return (AUValue)mRatio;
+            case VX1ExtensionParameterAddress::compress:
+                return (AUValue)mCompressPercent;
             case VX1ExtensionParameterAddress::attack:
                 return (AUValue)mAttackMs;
             case VX1ExtensionParameterAddress::release:
@@ -610,8 +610,9 @@ public:
     AUAudioFrameCount mMaxFramesToRender = 1024;
 
     // Compressor parameters (in dB and ms)
-    float mThresholdDb = -20.0f;
-    float mRatio = 4.0f;
+    float mCompressPercent = 30.0f; // 0% = no compression (0dB thresh, 1:1), 100% = max (−50dB thresh, 30:1)
+    float mThresholdDb = -15.0f;    // Derived from mCompressPercent
+    float mRatio = 9.7f;            // Derived from mCompressPercent
     float mAttackMs = 10.0f;
     float mReleaseMs = 100.0f;
     float mMakeupGainDb = 0.0f;
