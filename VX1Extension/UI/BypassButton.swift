@@ -10,23 +10,27 @@ import SwiftUI
 struct BypassButton: View {
     @State var param: ObservableAUParameter
 
-    let switchSize: CGFloat = 70
-
     var body: some View {
-        // Simple stomp button without animation
-        if let stompImage = NSImage(named: "stomp") {
-            Image(nsImage: stompImage)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: switchSize, height: switchSize)
-                .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
-                .onTapGesture {
-                    // Toggle bypass state
-                    param.onEditingChanged(true)
-                    param.boolValue.toggle()
-                    param.onEditingChanged(false)
-                }
-                .accessibility(identifier: param.displayName)
+        Button(action: {
+            param.onEditingChanged(true)
+            param.boolValue.toggle()
+            param.onEditingChanged(false)
+        }) {
+            Text(param.boolValue ? "BYPASSED" : "BYPASS")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(param.boolValue ? Color(red: 1.0, green: 0.4, blue: 0.3) : Color.white.opacity(0.5))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(param.boolValue ? 0.08 : 0.04))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(param.boolValue ? Color(red: 1.0, green: 0.4, blue: 0.3).opacity(0.6) : Color.white.opacity(0.15), lineWidth: 1)
+                )
         }
+        .buttonStyle(.plain)
+        .accessibility(identifier: param.displayName)
     }
 }

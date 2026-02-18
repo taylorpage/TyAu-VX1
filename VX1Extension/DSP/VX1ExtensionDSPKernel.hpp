@@ -525,6 +525,19 @@ public:
                                                    totalGainReductionDb + totalGainReductionDb2);
                 }
 
+                // Stack auto-makeup: compensate for the expected additional GR from pass 2.
+                // Derived from how much the second stage's threshold was lowered:
+                //   extraThresholdDb = mThresholdDb * stackBlend * 0.5  (negative number)
+                //   expectedGR2Db    = -extraThresholdDb * (1 - 1/ratio) (positive dB)
+                // This is static per Stack value (not per-sample), so it is stable and
+                // does not add pumping. At Stack=0 it evaluates to exactly 1.0 (no change).
+                float stackMakeupGain = 1.0f;
+                if (stackBlend > 0.0f) {
+                    float extraThresholdDb  = mThresholdDb * stackBlend * 0.5f;   // e.g. -5 dB at 50%
+                    float expectedGR2Db     = -extraThresholdDb * (1.0f - 1.0f / mRatio);
+                    stackMakeupGain = std::pow(10.0f, expectedGR2Db / 20.0f);
+                }
+
                 // Apply compression, saturation, makeup gain, then mix with dry signal
                 float mixWet = mMixPercent / 100.0f;
                 float mixDry = 1.0f - mixWet;
@@ -532,8 +545,9 @@ public:
                 for (UInt32 channel = 0; channel < inputBuffers.size(); ++channel) {
                     float audioInput = inputBuffers[channel][frameIndex] * mGateGain;
 
-                    // Apply pass 1 compression, then pass 2 GR multiplies on top (true serial stacking)
-                    float compressed = audioInput * gainReductionTotal * gainReductionTotal2;
+                    // Apply pass 1 compression, then pass 2 GR multiplies on top (true serial stacking).
+                    // stackMakeupGain compensates for the expected volume drop from the second pass.
+                    float compressed = audioInput * gainReductionTotal * gainReductionTotal2 * stackMakeupGain;
 
                     // Apply sheen saturation (presence-biased harmonic coloration)
                     float saturated = applySaturation(compressed, mBitePercent, (int)channel);

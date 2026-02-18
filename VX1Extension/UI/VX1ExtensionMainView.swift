@@ -30,100 +30,109 @@ struct VX1ExtensionMainView: View {
                     .foregroundColor(.white)
                     .padding(.top, 10)
 
-                // LED indicator
-                Circle()
-                    .fill(bypassParam.boolValue ? Color.gray : Color(red: 0.2, green: 0.8, blue: 1.0))
-                    .frame(width: 8, height: 8)
-                    .shadow(color: bypassParam.boolValue ? .clear : Color(red: 0.2, green: 0.8, blue: 1.0).opacity(0.8), radius: 4)
-
                 // VU Meter (gain reduction)
                 VUMeter(param: gainReductionParam, width: 300, height: 160)
                     .padding(.vertical, 4)
 
                 // Main controls grid
                 VStack(spacing: 8) {
-                    // Top row: Gate, Threshold, Ratio
-                    HStack(spacing: 10) {
-                        VStack(spacing: 2) {
+
+                    // Row 1: Stack — solo, largest knob
+                    HStack {
+                        VStack(spacing: 0) {
+                            ParameterKnob(param: parameterTree.global.stack, size: 80)
+                            Text("STACK")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(Color(red: 0.4, green: 0.8, blue: 1.0))
+                                .padding(.top, -28)
+                        }
+                    }
+
+                    // Row 2: Grip and Bite — character controls
+                    HStack(spacing: 15) {
+                        VStack(spacing: 0) {
+                            ParameterKnob(param: parameterTree.global.grip, size: 70)
+                            Text("GRIP")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.top, -26)
+                        }
+
+                        VStack(spacing: 0) {
+                            ParameterKnob(param: parameterTree.global.bite, size: 70)
+                            Text("BITE")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.top, -26)
+                        }
+                    }
+
+                    // Rows 3a/3b: Core compression controls — grouped tightly
+                    VStack(spacing: 4) {
+                        HStack(spacing: 15) {
+                            VStack(spacing: 0) {
+                                ParameterKnob(param: parameterTree.global.threshold, size: 65)
+                                Text("THRESHOLD")
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .padding(.top, -22)
+                            }
+
+                            VStack(spacing: 0) {
+                                ParameterKnob(param: parameterTree.global.ratio, size: 65)
+                                Text("RATIO")
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .padding(.top, -22)
+                            }
+                        }
+
+                        HStack(spacing: 15) {
+                            VStack(spacing: 0) {
+                                ParameterKnob(param: parameterTree.global.attack, size: 65)
+                                Text("ATTACK")
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .padding(.top, -22)
+                            }
+
+                            VStack(spacing: 0) {
+                                ParameterKnob(param: parameterTree.global.release, size: 65)
+                                Text("RELEASE")
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.8))
+                                    .padding(.top, -22)
+                            }
+                        }
+                    }
+
+                    // Row 4a: Gate — solo utility
+                    HStack {
+                        VStack(spacing: 0) {
                             ParameterKnob(param: parameterTree.global.gateThreshold, size: 55)
                             Text("GATE")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.2))
-                        }
-
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.threshold, size: 55)
-                            Text("THRESHOLD")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.ratio, size: 55)
-                            Text("RATIO")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.top, -20)
                         }
                     }
 
-                    // Second row: Attack and Release
+                    // Row 4b: Makeup and Mix — utility pair
                     HStack(spacing: 15) {
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.attack, size: 65)
-                            Text("ATTACK")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.release, size: 65)
-                            Text("RELEASE")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    }
-
-                    // Third row: Mix and Grip
-                    HStack(spacing: 15) {
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.mix, size: 65)
-                            Text("MIX")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.grip, size: 65)
-                            Text("GRIP")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    }
-
-                    // Fourth row: Makeup Gain and Bite
-                    HStack(spacing: 15) {
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.makeupGain, size: 65)
+                        VStack(spacing: 0) {
+                            ParameterKnob(param: parameterTree.global.makeupGain, size: 55)
                             Text("MAKEUP")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
+                                .padding(.top, -20)
                         }
 
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.bite, size: 65)
-                            Text("BITE")
+                        VStack(spacing: 0) {
+                            ParameterKnob(param: parameterTree.global.mix, size: 55)
+                            Text("MIX")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.8))
-                        }
-                    }
-
-                    // Fifth row: Stack (double compression blend)
-                    HStack(spacing: 15) {
-                        VStack(spacing: 2) {
-                            ParameterKnob(param: parameterTree.global.stack, size: 65)
-                            Text("STACK")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(Color(red: 0.4, green: 0.8, blue: 1.0))
+                                .padding(.top, -20)
                         }
                     }
 
@@ -131,9 +140,6 @@ struct VX1ExtensionMainView: View {
                 .padding(.vertical, 5)
 
                 Spacer()
-
-                // Bypass button
-                BypassButton(param: parameterTree.global.bypass)
 
                 // Logo
                 Text("TaylorAudio")
@@ -143,7 +149,7 @@ struct VX1ExtensionMainView: View {
             }
             .padding(12)
         }
-        .frame(width: 350, height: 770)
+        .frame(width: 350, height: 680)
     }
 
     // MARK: - Computed Properties
