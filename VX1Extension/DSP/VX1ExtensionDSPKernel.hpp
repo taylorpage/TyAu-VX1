@@ -114,12 +114,11 @@ public:
                 mThresholdLinear = std::pow(10.0f, mThresholdDb / 20.0f);
                 break;
             }
-            case VX1ExtensionParameterAddress::attack:
-                mAttackMs = value;
+            case VX1ExtensionParameterAddress::speed:
+                mSpeedMs = value;
+                mAttackMs = mSpeedMs;
+                mReleaseMs = mSpeedMs * 3.0f;
                 mAttackCoeff = std::exp(-1.0f / (mAttackMs * 0.001f * mSampleRate));
-                break;
-            case VX1ExtensionParameterAddress::release:
-                mReleaseMs = value;
                 mReleaseCoeff = std::exp(-1.0f / (mReleaseMs * 0.001f * mSampleRate));
                 break;
             case VX1ExtensionParameterAddress::makeupGain:
@@ -151,10 +150,8 @@ public:
         switch (address) {
             case VX1ExtensionParameterAddress::compress:
                 return (AUValue)mCompressPercent;
-            case VX1ExtensionParameterAddress::attack:
-                return (AUValue)mAttackMs;
-            case VX1ExtensionParameterAddress::release:
-                return (AUValue)mReleaseMs;
+            case VX1ExtensionParameterAddress::speed:
+                return (AUValue)mSpeedMs;
             case VX1ExtensionParameterAddress::makeupGain:
                 return (AUValue)mMakeupGainDb;
             case VX1ExtensionParameterAddress::bypass:
@@ -563,12 +560,10 @@ public:
             }
 
             // Update meter with peak gain reduction from this buffer
-            // Apply smoothing for visual stability (fast attack, adaptive release)
-            float meterAttackCoeff = 0.3f;  // Fast attack for meter
-
+            // Apply smoothing for visual stability (instant attack, adaptive release)
             if (peakGainReductionDb > mCurrentGainReductionDb) {
-                // Attack - respond quickly to increases
-                mCurrentGainReductionDb = meterAttackCoeff * mCurrentGainReductionDb + (1.0f - meterAttackCoeff) * peakGainReductionDb;
+                // Attack - snap immediately to peak so the needle reacts without lag
+                mCurrentGainReductionDb = peakGainReductionDb;
             } else {
                 // Release - use adaptive strategy based on how close to zero we are
                 if (peakGainReductionDb < 0.05f) {
@@ -613,8 +608,9 @@ public:
     float mCompressPercent = 30.0f; // 0% = no compression (0dB thresh, 1:1), 100% = max (−50dB thresh, 30:1)
     float mThresholdDb = -15.0f;    // Derived from mCompressPercent
     float mRatio = 9.7f;            // Derived from mCompressPercent
-    float mAttackMs = 10.0f;
-    float mReleaseMs = 100.0f;
+    float mSpeedMs = 10.0f;   // Speed knob; attack = mSpeedMs, release = mSpeedMs * 3
+    float mAttackMs = 10.0f;  // Derived: mSpeedMs
+    float mReleaseMs = 30.0f; // Derived: mSpeedMs * 3
     float mMakeupGainDb = 0.0f;
     float mMixPercent = 100.0f;
     float mGripPercent = 0.0f;    // 0% = RMS (smooth), 100% = Peak (tight/aggressive)

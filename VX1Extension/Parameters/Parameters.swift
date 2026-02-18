@@ -19,20 +19,12 @@ let VX1ExtensionParameterSpecs = ParameterTreeSpec {
             defaultValue: 30.0
         )
         ParameterSpec(
-            address: .attack,
-            identifier: "attack",
-            name: "Attack",
+            address: .speed,
+            identifier: "speed",
+            name: "Speed",
             units: .milliseconds,
-            valueRange: 0.0...200.0,
+            valueRange: 0.1...200.0,
             defaultValue: 10.0
-        )
-        ParameterSpec(
-            address: .release,
-            identifier: "release",
-            name: "Release",
-            units: .milliseconds,
-            valueRange: 5.0...5000.0,
-            defaultValue: 100.0
         )
         ParameterSpec(
             address: .makeupGain,

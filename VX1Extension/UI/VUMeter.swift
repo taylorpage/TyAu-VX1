@@ -2,41 +2,34 @@
 //  VUMeter.swift
 //  VX1Extension
 //
-//  Vintage analog-style VU meter driven by an ObservableAUParameter.
-//  The parameter carries output level in dB (-60 to 0).
-//  The VU scale runs from -20 dB (needle far left, value=0.0) to +3 dB (far right, value=1.0),
-//  matching the standard VU meter operating point where 0 dBVU = value 0.75.
+//  Vintage analog-style VU meter. Driven by a CADisplayLink that calls a value provider
+//  closure each display frame, bypassing the AU parameter polling pipeline entirely.
 //
 
 import SwiftUI
 
 struct VUMeter: View {
-    @State var param: ObservableAUParameter
+    /// Called each display frame to get the current gain reduction in dB (0–40).
+    let valueProvider: () -> Float
 
     let width: CGFloat
     let height: CGFloat
+
+    @State private var normalizedValue: Double = 0.0
+    @State private var displayLinkHolder: DisplayLinkHolder?
 
     // Arc configuration - needle sweeps from left to right over 120°
     private let startAngle: Double = 210
     private let endAngle: Double = 330
 
-    init(param: ObservableAUParameter,
+    init(valueProvider: @escaping () -> Float,
          width: CGFloat = 300,
          height: CGFloat = 180) {
-        self.param = param
+        self.valueProvider = valueProvider
         self.width = width
         self.height = height
     }
 
-    // Map gain reduction (dB, 0–40) to VU meter 0.0–1.0 range.
-    // 0 dB GR = needle far LEFT (0.0), 40 dB GR = needle far RIGHT (1.0).
-    private var normalizedValue: Double {
-        let gr = Double(param.value)
-        let clamped = max(0.0, min(40.0, gr))
-        return clamped / 40.0
-    }
-
-    // Needle angle based on a normalized value (0.0 to 1.0)
     private func needleAngle(for value: Double) -> Angle {
         let totalDegrees = endAngle - startAngle
         let degrees = startAngle + (value * totalDegrees)
@@ -55,7 +48,6 @@ struct VUMeter: View {
     ]
 
     var body: some View {
-        // Capture normalizedValue at body level so @Observable tracking fires here
         let currentValue = normalizedValue
         return ZStack {
             // Outer dark frame/bezel
@@ -165,6 +157,17 @@ struct VUMeter: View {
                 .blendMode(.overlay)
         }
         .frame(width: width, height: height)
+        .onAppear {
+            let holder = DisplayLinkHolder(valueProvider: valueProvider) { newValue in
+                normalizedValue = newValue
+            }
+            displayLinkHolder = holder
+            holder.start()
+        }
+        .onDisappear {
+            displayLinkHolder?.stop()
+            displayLinkHolder = nil
+        }
     }
 
     // MARK: - Red Danger Zone
@@ -268,6 +271,62 @@ struct VUMeter: View {
     }
 
 
+    // MARK: - Display Link
+
+    /// Polls the DSP value directly on a high-frequency main-thread timer.
+    /// Bypasses the AU parameter pipeline so needle latency is one timer tick (~8ms at 120Hz).
+    @MainActor
+    final class DisplayLinkHolder {
+        private var timer: Timer?
+        private let valueProvider: () -> Float
+        private let onValue: (Double) -> Void
+        private var displayed: Double = 0.0
+        private var lastDsp: Double = -1.0
+        private var frozenTicks: Int = 0
+
+        init(valueProvider: @escaping () -> Float, onValue: @escaping (Double) -> Void) {
+            self.valueProvider = valueProvider
+            self.onValue = onValue
+        }
+
+        func start() {
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 120.0, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                let raw = Double(self.valueProvider())
+                let dsp = max(0.0, min(40.0, raw))
+
+                // Track whether the DSP value is changing. When audio stops,
+                // process() is no longer called so the DSP value freezes.
+                if dsp != self.lastDsp {
+                    self.lastDsp = dsp
+                    self.frozenTicks = 0
+                } else {
+                    self.frozenTicks += 1
+                }
+
+                // After ~100ms of no change (~12 ticks at 120Hz), consider audio stopped
+                // and decay the displayed value to zero.
+                let target: Double = self.frozenTicks > 12 ? 0.0 : dsp
+
+                if target > self.displayed {
+                    // Attack: snap immediately
+                    self.displayed = target
+                } else {
+                    // Release: smooth decay toward target
+                    let decayCoeff = 0.92
+                    self.displayed = self.displayed * decayCoeff + target * (1.0 - decayCoeff)
+                    if self.displayed < 0.05 { self.displayed = 0.0 }
+                }
+                self.onValue(self.displayed / 40.0)
+            }
+        }
+
+        func stop() {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
     // MARK: - Needle
 
     private func needleView(value: Double) -> some View {
@@ -296,7 +355,6 @@ struct VUMeter: View {
                         y: (centerY + pivotY) / geometry.size.height
                     ))
                     .shadow(color: .black.opacity(0.5), radius: 2, x: 1, y: 1)
-                    .animation(.linear(duration: 0.05), value: value)
 
                 // Pivot circle
                 Circle()

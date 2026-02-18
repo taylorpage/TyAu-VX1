@@ -11,8 +11,7 @@
 
 typedef NS_ENUM(AUParameterAddress, VX1ExtensionParameterAddress) {
     compress = 0,             // Combined threshold+ratio control: 0% = no compression, 100% = max compression
-    attack = 2,
-    release = 3,
+    speed = 2,                // Speed (ms): sets attack; release = speed * 10
     makeupGain = 4,
     bypass = 5,
     mix = 6,

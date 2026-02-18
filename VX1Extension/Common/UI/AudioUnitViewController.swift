@@ -102,11 +102,21 @@ public class AudioUnitViewController: AUViewController, AUAudioUnitFactory {
             host.removeFromParent()
             host.view.removeFromSuperview()
         }
-        
+
         guard let observableParameterTree = audioUnit.observableParameterTree else {
             return
         }
-        let content = VX1ExtensionMainView(parameterTree: observableParameterTree)
+
+        // Provide a direct DSP read path for the meter, bypassing the AU parameter pipeline.
+        // The display link in VUMeter calls this each frame, so latency is one display refresh (~8–16ms).
+        let meterProvider: () -> Float
+        if let vx1AU = audioUnit as? VX1ExtensionAudioUnit {
+            meterProvider = { vx1AU.kernel.getParameter(VX1ExtensionParameterAddress.gainReductionMeter.rawValue) }
+        } else {
+            meterProvider = { 0.0 }
+        }
+
+        let content = VX1ExtensionMainView(parameterTree: observableParameterTree, meterValueProvider: meterProvider)
         let host = HostingController(rootView: content)
         self.addChild(host)
         host.view.frame = self.view.bounds

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct VX1ExtensionMainView: View {
     var parameterTree: ObservableAUParameterGroup
+    var meterValueProvider: () -> Float
 
     var body: some View {
         ZStack {
@@ -31,7 +32,7 @@ struct VX1ExtensionMainView: View {
                     .padding(.top, 10)
 
                 // VU Meter (gain reduction)
-                VUMeter(param: gainReductionParam, width: 300, height: 160)
+                VUMeter(valueProvider: meterValueProvider, width: 300, height: 160)
                     .padding(.vertical, 4)
 
                 // Main controls grid
@@ -81,16 +82,8 @@ struct VX1ExtensionMainView: View {
 
                         HStack(spacing: 15) {
                             VStack(spacing: 0) {
-                                ParameterKnob(param: parameterTree.global.attack, size: 65)
-                                Text("ATTACK")
-                                    .font(.system(size: 8, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .padding(.top, -22)
-                            }
-
-                            VStack(spacing: 0) {
-                                ParameterKnob(param: parameterTree.global.release, size: 65)
-                                Text("RELEASE")
+                                ParameterKnob(param: parameterTree.global.speed, size: 65)
+                                Text("SPEED")
                                     .font(.system(size: 8, weight: .semibold))
                                     .foregroundColor(.white.opacity(0.8))
                                     .padding(.top, -22)
@@ -148,9 +141,5 @@ struct VX1ExtensionMainView: View {
 
     var bypassParam: ObservableAUParameter {
         parameterTree.global.bypass
-    }
-
-    var gainReductionParam: ObservableAUParameter {
-        parameterTree.global.gainReductionMeter
     }
 }
