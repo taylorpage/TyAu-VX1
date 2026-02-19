@@ -12,12 +12,12 @@ struct VX1ExtensionMainView: View {
     var meterValueProvider: () -> Float
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottomTrailing) {
             // Dark gradient background for professional compressor look
             LinearGradient(
                 gradient: Gradient(colors: [
-                    Color(red: 0.15, green: 0.15, blue: 0.18),
-                    Color(red: 0.10, green: 0.10, blue: 0.12)
+                    Color(red: 0.08, green: 0.18, blue: 0.20),
+                    Color(red: 0.05, green: 0.12, blue: 0.15)
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
@@ -25,19 +25,13 @@ struct VX1ExtensionMainView: View {
             .cornerRadius(8)
 
             VStack(spacing: 0) {
-                // Title
-                Text("VX1 COMPRESSOR")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.top, 4)
-                    .padding(.bottom, 4)
-
                 // VU Meter (gain reduction) — bleeds to chassis edges
                 GeometryReader { geo in
-                    VUMeter(valueProvider: meterValueProvider, width: geo.size.width - 60, height: 160)
+                    VUMeter(valueProvider: meterValueProvider, width: geo.size.width - 60, height: 110)
                         .offset(x: 30)
                 }
-                .frame(height: 160)
+                .frame(height: 110)
+                .padding(.top, 30)
 
                 // Main controls grid
                 VStack(spacing: 0) {
@@ -70,15 +64,15 @@ struct VX1ExtensionMainView: View {
                     }
                     .padding(.top, 6)
 
-                    // Row 2: Stack — large, centered, solo
+                    // Row 2: Compress — hero knob
                     VStack(spacing: 0) {
-                        ParameterKnob(param: parameterTree.global.stack, size: 90)
-                        Text("STACK")
+                        ParameterKnob(param: parameterTree.global.compress, size: 150)
+                        Text("COMPRESS")
                             .font(.system(size: 8, weight: .semibold))
-                            .foregroundColor(Color(red: 0.4, green: 0.8, blue: 1.0))
-                            .padding(.top, -34)
+                            .foregroundColor(.white.opacity(0.8))
+                            .padding(.top, -54)
                     }
-                    .padding(.top, -30)
+                    .padding(.top, -50)
 
                     // Row 3: Grip (left), Bite (right) — medium character knobs
                     HStack(spacing: 40) {
@@ -98,32 +92,18 @@ struct VX1ExtensionMainView: View {
                                 .padding(.top, -26)
                         }
                     }
-                    .padding(.top, -45)
-
-                    // Row 4: Compress (hero) + Mix (bottom-right corner)
-                    ZStack(alignment: .bottomTrailing) {
-                        HStack {
-                            Spacer()
-                            VStack(spacing: 0) {
-                                ParameterKnob(param: parameterTree.global.compress, size: 150)
-                                Text("COMPRESS")
-                                    .font(.system(size: 8, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .padding(.top, -54)
-                            }
-                            Spacer()
-                        }
-
-                        VStack(spacing: 0) {
-                            ParameterKnob(param: parameterTree.global.mix, size: 44)
-                            Text("MIX")
-                                .font(.system(size: 8, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding(.top, -17)
-                        }
-                        .offset(x: 4, y: -2)
-                    }
                     .padding(.top, -65)
+
+                    // Row 4: Stack — full-width horizontal slider
+                    VStack(spacing: 4) {
+                        ParameterSlider(param: parameterTree.global.stack)
+                            .padding(.horizontal, 28)
+                        Text("STACK")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundColor(Color(red: 0.4, green: 0.8, blue: 1.0))
+                    }
+                    .padding(.top, 8)
+                    .padding(.bottom, 70)
 
                 }
 
@@ -131,10 +111,20 @@ struct VX1ExtensionMainView: View {
                 Text("TaylorAudio")
                     .font(.system(size: 9))
                     .foregroundColor(.gray)
-                    .padding(.top, 4)
                     .padding(.bottom, 4)
             }
             .padding(.horizontal, 6)
+
+            // Mix — pinned to bottom-right corner of chassis
+            VStack(spacing: 0) {
+                ParameterKnob(param: parameterTree.global.mix, size: 44)
+                Text("MIX")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+                    .padding(.top, -17)
+            }
+            .padding(.bottom, 10)
+            .padding(.trailing, 4)
         }
         .frame(width: 260, height: 520)
     }
